@@ -10,9 +10,10 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:generate": "drizzle-kit generate",
-    "db:push": "drizzle-kit push",
-    "db:seed": "tsx --env-file=.env.local db/seed.ts"
+    "db:generate": "node --env-file=.env.local node_modules/drizzle-kit/bin.cjs generate",
+    "db:push": "node --env-file=.env.local node_modules/drizzle-kit/bin.cjs push",
+    "db:seed": "tsx --env-file=.env.local db/seed.ts",
+    "test:integration": "node --env-file=.env.local node_modules/vitest/vitest.mjs run -c vitest.integration.config.mts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",

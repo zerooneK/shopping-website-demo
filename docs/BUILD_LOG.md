@@ -22,3 +22,8 @@
 - ผล: รอบแรก FAIL (1 High, 1 Medium, 2 Low) → รอบสอง (low) PASS · 105 tests
 - ปัญหาที่เจอ: High = `claimItem` จองทับสินค้าที่ออเดอร์ `awaiting_review` ถืออยู่ได้ (ขายซ้ำ) เพราะเทสต์เดิม assert หลวม · แก้ด้วย `NOT EXISTS` + ล้าง `reserved_until` ตอนอัปสลิป + ใช้ `now()` ของ DB
 - ข้อจำกัด: SQL จริงยังไม่ได้ทดสอบกับ Postgres/Neon ต้องทำ integration test ก่อน deploy · handler อัปสลิป (3c) ต้องล้าง `reserved_until` ตามสัญญา
+
+## 2026-10-12 · ขั้น 3a-integration · shop-builder (sonnet · medium)
+- งาน: เพิ่ม integration test กับ Postgres (Neon) จริง `tests/integration/reserve.pg.test.ts` + `vitest.integration.config.mts` + script `npm run test:integration` (โหลด .env.local ผ่าน `node --env-file`, ไม่รวมใน `npm test`, skip พร้อมข้อความถ้าไม่มี DATABASE_URL) · ใช้ createDrizzleReserveStore + getDb ตัวจริง · ข้อมูลทดสอบใช้รหัส T901-T999 ลบเฉพาะของตัวเองก่อน/หลังรัน · ครอบคลุม: (a) จองพร้อมกัน 20 ราย สำเร็จ 1 (b) สถานการณ์ X/Y หลังอัปสลิป ทั้ง reserved_until อดีตและ NULL (c) lazy expiry + event (d) confirmed/shipped/completed ไม่ถูกจองทับ (e) now()+15 นาที และ expires_at == reserved_until (f) rollback เมื่อ UNIQUE token ล้ม รวม lazy expiry ถูกย้อน
+- ผล: ผ่าน (test:integration = 9 tests บน Neon จริง, lint, typecheck, test = 105, build) · ตรวจแล้วไม่มีแถว T9xx ค้าง และ seed เดิมยังอยู่
+- ปัญหาที่เจอ / การ escalate: ไม่พบบั๊กใน lib/reserve.ts · ข้อจำกัด: ยังไม่ได้ทดสอบ handler อัปสลิป (3c) และ cron
