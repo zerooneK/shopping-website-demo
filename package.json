@@ -13,7 +13,8 @@
     "db:generate": "node --env-file=.env.local node_modules/drizzle-kit/bin.cjs generate",
     "db:push": "node --env-file=.env.local node_modules/drizzle-kit/bin.cjs push",
     "db:seed": "tsx --env-file=.env.local db/seed.ts",
-    "test:integration": "node --env-file=.env.local node_modules/vitest/vitest.mjs run -c vitest.integration.config.mts"
+    "test:integration": "node --env-file=.env.local node_modules/vitest/vitest.mjs run -c vitest.integration.config.mts",
+    "test:e2e": "node --env-file=.env.local node_modules/@playwright/test/cli.js test"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
@@ -28,6 +29,7 @@
     "zod": "^4.6.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.0",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^24.19.2",
     "@types/qrcode": "^1.5.6",

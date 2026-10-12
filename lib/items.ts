@@ -1,5 +1,5 @@
 import "server-only";
-import { asc, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { cacheLife, cacheTag } from "next/cache";
 import { connection } from "next/server";
 import { getDb } from "../db/client";
@@ -64,7 +64,27 @@ export async function getPublicItems(): Promise<PublicItem[]> {
 
 export async function getPublicItem(code: string): Promise<PublicItem | null> {
   const all = await getPublicItems();
-  return all.find((i) => i.code === code) ?? null;
+  const cached = all.find((i) => i.code === code);
+  if (cached) return cached;
+  // ไม่อยู่ใน cache (เช่น เพิ่งเพิ่มสินค้าใหม่ ก่อนที่ cache 5 นาทีจะหมดอายุ) → ถามฐานข้อมูลตรงๆ
+  // อีกครั้งเฉพาะรหัสนี้ เพื่อไม่ให้ลูกค้าเจอ 404 ทั้งที่สินค้ามีอยู่จริง
+  // (รหัสที่ไม่มีจริงถูกตัดที่ proxy.ts ก่อนถึงตรงนี้)
+  await connection();
+  const [row] = await getDb()
+    .select({
+      code: items.code,
+      title: items.title,
+      description: items.description,
+      flaws: items.flaws,
+      condition: items.condition,
+      category: items.category,
+      price: items.price,
+      images: items.images,
+    })
+    .from(items)
+    .where(and(eq(items.code, code), sql`${items.status} <> 'hidden'`))
+    .limit(1);
+  return row ?? null;
 }
 
 /** สถานะสดของทุกชิ้น (ไม่ cache) — key = code; ชิ้นที่ซ่อนอยู่จะไม่อยู่ใน map */

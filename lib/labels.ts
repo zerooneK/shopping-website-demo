@@ -38,3 +38,19 @@ export function formatCountdown(msLeft: number): string {
   const s = total % 60;
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
+
+export const DELIVERY_LABEL = {
+  pickup: "นัดรับ",
+  post: "ส่งไปรษณีย์",
+} as const;
+
+const THAI_DATE_TIME = new Intl.DateTimeFormat("th-TH", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "Asia/Bangkok",
+});
+
+/** วันเวลาแบบไทย (เขตเวลากรุงเทพฯ) — ใช้ในฝั่ง server เท่านั้นเพื่อกัน hydration mismatch */
+export function formatThaiDateTime(ms: number): string {
+  return THAI_DATE_TIME.format(new Date(ms));
+}

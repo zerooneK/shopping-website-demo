@@ -103,6 +103,8 @@ export const orders = pgTable(
     trackingNo: text("tracking_no"),
     rejectReason: text("reject_reason"),
     demoSessionId: text("demo_session_id"),
+    // HMAC-SHA256 ของ IP ผู้สั่ง (ห้ามเก็บ IP ดิบ) ใช้ทำ rate limit ตาม IP (SPEC §7) — nullable เพราะออเดอร์เก่าไม่มี
+    clientIpHash: text("client_ip_hash"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -113,6 +115,7 @@ export const orders = pgTable(
   (t) => [
     index("orders_status_created_idx").on(t.status, t.createdAt),
     index("orders_item_idx").on(t.itemId),
+    index("orders_ip_created_idx").on(t.clientIpHash, t.createdAt),
   ],
 );
 

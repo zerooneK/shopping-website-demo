@@ -37,6 +37,8 @@ function makeStore(
   const data: FakeState = structuredClone(initial);
   let nowMs = (opts.now ?? NOW).getTime();
   let seq = 0;
+  /** ลำดับการขอ advisory lock ทั้งหมด (ใช้ยืนยันลำดับ IP → session → shop) */
+  const lockLog: string[] = [];
   const store: ReserveStore = {
     async transaction<T>(fn: (tx: ReserveTx) => Promise<T>) {
       // write log ของ tx นี้: undo ต่อรายการ — rollback ย้อนเฉพาะสิ่งที่ tx นี้เขียน
@@ -108,6 +110,7 @@ function makeStore(
             address: null,
             note: null,
             demoSessionId: null,
+            clientIpHash: null,
             status: "pending_payment",
             ...values,
           } as Order;
@@ -116,6 +119,38 @@ function makeStore(
             data.orders.splice(data.orders.indexOf(order), 1);
           });
           return order;
+        },
+        async lockSession() {
+          await Promise.resolve();
+          lockLog.push("session");
+        },
+        async lockIp() {
+          await Promise.resolve();
+          lockLog.push("ip");
+        },
+        async countIpOrders(ipHash) {
+          await Promise.resolve();
+          const mine = data.orders.filter((o) => o.clientIpHash === ipHash);
+          return {
+            holding: mine.filter(
+              (o) =>
+                o.status === "awaiting_review" ||
+                (o.status === "pending_payment" && o.expiresAt.getTime() >= nowMs),
+            ).length,
+            lastHour: mine.length,
+          };
+        },
+        async countSessionOrders(sid) {
+          await Promise.resolve();
+          const mine = data.orders.filter((o) => o.demoSessionId === sid);
+          return {
+            pending: mine.filter(
+              (o) => o.status === "pending_payment" && o.expiresAt.getTime() >= nowMs,
+            ).length,
+            // นาฬิกาของ store ใช้ nowMs แต่ createdAt ในเทสต์เป็นเวลาจริงของเครื่อง
+            // จึงให้ createdAt ใหม่นับเป็น "ภายใน 1 ชม." ทั้งหมด
+            lastHour: mine.length,
+          };
         },
         async insertEvents(events) {
           data.events.push(...events);
@@ -135,6 +170,7 @@ function makeStore(
   return {
     store,
     state: () => data,
+    lockLog,
     /** เลื่อนนาฬิกาของ "DB" */
     setNow: (d: Date) => {
       nowMs = d.getTime();
@@ -378,5 +414,170 @@ describe("reserveItem", () => {
     expect(failing.state().events.filter((e) => e.type === "expire")).toHaveLength(0);
     // งานที่ commit ไปก่อนหน้า (ออเดอร์ของ A013) ยังอยู่
     expect(failing.state().orders.filter((o) => o.itemId === 2)).toHaveLength(1);
+  });
+});
+
+describe("reserveItem rate limit (SPEC §7)", () => {
+  const items4 = () => [
+    item({ id: 1, code: "A001" }),
+    item({ id: 2, code: "A002" }),
+    item({ id: 3, code: "A003" }),
+    item({ id: 4, code: "A004" }),
+  ];
+
+  it("allows 2 pending orders per session and rejects the 3rd without touching the item", async () => {
+    const { store, state } = makeStore(fresh(items4()));
+    expect((await reserveItem(store, input({ code: "A001" }), "sid-1")).ok).toBe(true);
+    expect((await reserveItem(store, input({ code: "A002" }), "sid-1")).ok).toBe(true);
+    const third = await reserveItem(store, input({ code: "A003" }), "sid-1");
+    expect(third).toEqual({ ok: false, reason: "too_many_pending" });
+    // ไม่แตะสินค้า/ออเดอร์
+    expect(state().items.find((i) => i.code === "A003")?.status).toBe("available");
+    expect(state().orders).toHaveLength(2);
+  });
+
+  it("counts per session: another browser is unaffected", async () => {
+    const { store } = makeStore(fresh(items4()));
+    await reserveItem(store, input({ code: "A001" }), "sid-1");
+    await reserveItem(store, input({ code: "A002" }), "sid-1");
+    expect((await reserveItem(store, input({ code: "A003" }), "sid-2")).ok).toBe(true);
+  });
+
+  it("pending orders past expires_at no longer count (DB clock)", async () => {
+    const { store, setNow } = makeStore(fresh(items4()));
+    await reserveItem(store, input({ code: "A001" }), "sid-1");
+    await reserveItem(store, input({ code: "A002" }), "sid-1");
+    setNow(minutes(NOW, RESERVE_MINUTES + 1)); // ทั้งสองออเดอร์หมดเวลาแล้ว
+    expect((await reserveItem(store, input({ code: "A003" }), "sid-1")).ok).toBe(true);
+  });
+
+  it("rejects the 6th order within an hour even when none are pending", async () => {
+    const many = Array.from({ length: 6 }, (_, i) => item({ id: i + 1, code: `A00${i + 1}` }));
+    const { store, state, setNow } = makeStore(fresh(many));
+    for (let i = 0; i < 5; i++) {
+      expect((await reserveItem(store, input({ code: `A00${i + 1}` }), "sid-1")).ok).toBe(true);
+      // ปล่อยให้หมดเวลาทีละใบ เพื่อไม่ชน limit pending
+      setNow(minutes(NOW, (i + 1) * (RESERVE_MINUTES + 1)));
+    }
+    expect(state().orders).toHaveLength(5);
+    expect(await reserveItem(store, input({ code: "A006" }), "sid-1")).toEqual({
+      ok: false,
+      reason: "too_many_per_hour",
+    });
+  });
+
+  it("skips the limit when no session id is supplied", async () => {
+    const { store } = makeStore(fresh(items4()));
+    for (const code of ["A001", "A002", "A003"]) {
+      expect((await reserveItem(store, input({ code }), null)).ok).toBe(true);
+    }
+  });
+});
+
+describe("reserveItem rate limit ต่อ IP (3b-2-fix) และไม่มีเพดานรวมทั้งร้าน (3b-2-fix2)", () => {
+  const many = (n: number) =>
+    Array.from({ length: n }, (_, i) => item({ id: i + 1, code: `A${String(i + 1).padStart(3, "0")}` }));
+  const code = (i: number) => `A${String(i).padStart(3, "0")}`;
+  const sidN = (i: number) => `sid-${i}`;
+
+  it("ไม่ส่ง cookie (sid ใหม่ทุกครั้ง) จาก IP เดียวกัน: หยุดที่ 3 ออเดอร์ที่ยังถือสินค้า", async () => {
+    const { store, state } = makeStore(fresh(many(12)));
+    const results = [];
+    for (let i = 1; i <= 6; i++) {
+      results.push(await reserveItem(store, input({ code: code(i) }), sidN(i), { clientIpHash: "ip-A" }));
+    }
+    expect(results.slice(0, 3).every((r) => r.ok)).toBe(true);
+    expect(results[3]).toEqual({ ok: false, reason: "ip_too_many_holding" });
+    expect(state().orders).toHaveLength(3);
+    // บันทึก hash ของ IP ลงออเดอร์ (ไม่ใช่ IP ดิบ)
+    expect(state().orders.every((o) => o.clientIpHash === "ip-A")).toBe(true);
+  });
+
+  it("นับ awaiting_review เป็นการถือสินค้าของ IP; หมดเวลาแล้วไม่นับ", async () => {
+    const { store, state, setNow } = makeStore(fresh(many(12)));
+    for (let i = 1; i <= 3; i++) await reserveItem(store, input({ code: code(i) }), null, { clientIpHash: "ip-A" });
+    // ออเดอร์ 1 ส่งสลิปแล้ว → ยังถือ แม้เลยเวลาจองเดิม
+    state().orders[0].status = "awaiting_review";
+    setNow(minutes(NOW, RESERVE_MINUTES + 1)); // อีก 2 ใบ (pending) หมดเวลา
+    expect((await reserveItem(store, input({ code: code(4) }), null, { clientIpHash: "ip-A" })).ok).toBe(true);
+    expect((await reserveItem(store, input({ code: code(5) }), null, { clientIpHash: "ip-A" })).ok).toBe(true);
+    // ตอนนี้ถือ: awaiting(1) + pending(2) = 3 → ใบที่ 6 ถูกปฏิเสธ
+    expect(await reserveItem(store, input({ code: code(6) }), null, { clientIpHash: "ip-A" })).toEqual({
+      ok: false,
+      reason: "ip_too_many_holding",
+    });
+  });
+
+  it("เพดาน 8 ออเดอร์/ชม. ต่อ IP แม้ไม่มีออเดอร์ค้าง", async () => {
+    const { store, state, setNow } = makeStore(fresh(many(12)));
+    for (let i = 1; i <= 8; i++) {
+      expect((await reserveItem(store, input({ code: code(i) }), sidN(i), { clientIpHash: "ip-A" })).ok).toBe(true);
+      setNow(minutes(NOW, i * (RESERVE_MINUTES + 1))); // ปล่อยให้หมดเวลาทีละใบ
+    }
+    expect(state().orders).toHaveLength(8);
+    expect(await reserveItem(store, input({ code: code(9) }), sidN(9), { clientIpHash: "ip-A" })).toEqual({
+      ok: false,
+      reason: "ip_too_many_per_hour",
+    });
+  });
+
+  it("IP อื่นไม่ถูกกระทบจาก limit ของ IP หนึ่ง", async () => {
+    const { store } = makeStore(fresh(many(12)));
+    for (let i = 1; i <= 3; i++) await reserveItem(store, input({ code: code(i) }), null, { clientIpHash: "ip-A" });
+    expect((await reserveItem(store, input({ code: code(4) }), null, { clientIpHash: "ip-B" })).ok).toBe(true);
+  });
+
+  it("ไม่มีเพดานรวมทั้งร้าน: หลาย IP (IP ละ 1 ออเดอร์) จองได้ครบทุกชิ้นที่ว่าง", async () => {
+    const { store, state } = makeStore(fresh(many(12)));
+    const results = [];
+    for (let i = 1; i <= 12; i++) {
+      results.push(await reserveItem(store, input({ code: code(i) }), sidN(i), { clientIpHash: `ip-${i}` }));
+    }
+    expect(results.every((r) => r.ok)).toBe(true);
+    expect(state().orders).toHaveLength(12);
+  });
+
+  it("ออเดอร์ awaiting_review/confirmed/shipped/completed จำนวนมากจากหลาย IP ไม่ทำให้ IP ใหม่ถูกปฏิเสธเพราะ 'ร้านเต็ม' (ปฏิเสธเฉพาะชิ้นที่ถูกถือ)", async () => {
+    const { store, state } = makeStore(fresh(many(12)));
+    for (let i = 1; i <= 8; i++) await reserveItem(store, input({ code: code(i) }), null, { clientIpHash: `ip-${i}` });
+    const statuses = ["awaiting_review", "confirmed", "shipped", "completed", "awaiting_review", "confirmed", "shipped", "completed"] as const;
+    state().orders.forEach((o, i) => {
+      o.status = statuses[i];
+    });
+    // IP ใหม่ + ชิ้นที่ว่าง → จองได้
+    expect((await reserveItem(store, input({ code: code(9) }), null, { clientIpHash: "ip-new-1" })).ok).toBe(true);
+    expect((await reserveItem(store, input({ code: code(10) }), "sid-new", { clientIpHash: "ip-new-2" })).ok).toBe(true);
+    // ชิ้นที่ถูกถืออยู่ → unavailable (ไม่ใช่ rate limit ใดๆ)
+    expect(await reserveItem(store, input({ code: code(1) }), null, { clientIpHash: "ip-new-3" })).toEqual({
+      ok: false,
+      reason: "unavailable",
+    });
+  });
+
+  it("IP หนึ่งติดเพดานของตัวเอง → IP อื่นยังจองชิ้นที่ว่างได้", async () => {
+    const { store } = makeStore(fresh(many(12)));
+    for (let i = 1; i <= 3; i++) await reserveItem(store, input({ code: code(i) }), null, { clientIpHash: "ip-A" });
+    expect(await reserveItem(store, input({ code: code(4) }), null, { clientIpHash: "ip-A" })).toEqual({
+      ok: false,
+      reason: "ip_too_many_holding",
+    });
+    expect((await reserveItem(store, input({ code: code(4) }), null, { clientIpHash: "ip-B" })).ok).toBe(true);
+  });
+
+  it("ถูกปฏิเสธแล้วไม่แตะสินค้า/ออเดอร์/event", async () => {
+    const { store, state } = makeStore(fresh(many(12)));
+    for (let i = 1; i <= 3; i++) await reserveItem(store, input({ code: code(i) }), null, { clientIpHash: "ip-A" });
+    const before = structuredClone(state());
+    await reserveItem(store, input({ code: code(4) }), null, { clientIpHash: "ip-A" });
+    expect(state()).toEqual(before);
+  });
+
+  it("ลำดับการล็อกตายตัว: ip → session (กัน deadlock) และไม่มีล็อกระดับทั้งร้าน", async () => {
+    const { store, lockLog } = makeStore(fresh(many(3)));
+    await reserveItem(store, input({ code: code(1) }), "sid-1", { clientIpHash: "ip-A" });
+    expect(lockLog).toEqual(["ip", "session"]);
+    lockLog.length = 0;
+    await reserveItem(store, input({ code: code(2) }), null, { clientIpHash: "ip-A" });
+    expect(lockLog).toEqual(["ip"]);
   });
 });

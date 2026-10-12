@@ -38,18 +38,18 @@ export async function Catalog({ searchParams }: { searchParams: SP }) {
         </p>
       ) : null}
 
-      <div className="mt-8">
+      <div className="mt-2 sm:mt-8">
         <CategoryNav active={category} />
       </div>
 
-      <p className="meta meta-th mt-6" aria-live="polite">
+      <p className="meta meta-th mt-3 sm:mt-6" aria-live="polite">
         {category ? CATEGORY_LABEL[category] : "ทั้งหมด"} · {items.length} ชิ้น
       </p>
 
       {items.length === 0 ? (
         <p className="mt-10 text-muted">ตอนนี้ยังไม่มีสินค้าในหมวดนี้ ลองดูหมวดอื่นก่อนนะ</p>
       ) : (
-        <ul className="mt-6 grid grid-cols-1 gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-12 lg:items-start">
+        <ul className="mt-3 grid grid-cols-1 gap-x-8 sm:mt-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-12 lg:items-start">
           {items.map((item, i) => (
             <li key={item.code} className={`${SPANS[i % SPANS.length]} ${OFFSETS[i % OFFSETS.length]}`}>
               <ItemCard item={item} eager={i < 2} />

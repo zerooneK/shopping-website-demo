@@ -1,0 +1,131 @@
+import "server-only";
+import { asc, eq, sql } from "drizzle-orm";
+import { getDb } from "../../db/client";
+import type { DeliveryMethod, OrderStatus } from "../../db/schema";
+import { items, orderEvents, orders } from "../../db/schema";
+import { expireOrderIfStale } from "./commands";
+import { isValidOrderToken } from "./view";
+
+/**
+ * อ่านออเดอร์สำหรับหน้าลูกค้า — ค้นด้วย token เท่านั้น (ไม่รับ id)
+ * ทุก query ผ่าน expireOrderIfStale ก่อน เพื่อให้สถานะ "หมดเวลา" ถูกบันทึกจริง (SPEC §5 ข้อ 2)
+ * และคืน dbNow (now() ของ DB) เพื่อให้ client คำนวณนับถอยหลังโดยไม่พึ่งนาฬิกาเครื่องตัวเอง
+ *
+ * สิ่งที่ "ไม่" ส่งออกไป: slipPath, demoSessionId, phone, customerName
+ */
+
+export type CustomerOrder = {
+  id: string;
+  status: OrderStatus;
+  amount: number;
+  shippingFee: number;
+  deliveryMethod: DeliveryMethod;
+  address: string | null;
+  trackingNo: string | null;
+  rejectReason: string | null;
+  expiresAt: Date;
+  dbNow: Date;
+  item: {
+    code: string;
+    title: string;
+    image: { url: string; alt: string } | null;
+  };
+  events: { type: string; meta: Record<string, unknown> | null; createdAt: Date }[];
+};
+
+export async function getCustomerOrder(token: string): Promise<CustomerOrder | null> {
+  if (!isValidOrderToken(token)) return null;
+  const db = getDb();
+  await expireOrderIfStale(db, token);
+
+  const [row] = await db
+    .select({
+      id: orders.id,
+      status: orders.status,
+      amount: orders.amount,
+      shippingFee: orders.shippingFee,
+      deliveryMethod: orders.deliveryMethod,
+      address: orders.address,
+      trackingNo: orders.trackingNo,
+      rejectReason: orders.rejectReason,
+      expiresAt: orders.expiresAt,
+      dbNow: sql<Date | string>`now()`,
+      itemCode: items.code,
+      itemTitle: items.title,
+      itemImages: items.images,
+    })
+    .from(orders)
+    .innerJoin(items, eq(items.id, orders.itemId))
+    .where(eq(orders.token, token));
+  if (!row) return null;
+
+  const events = await db
+    .select({ type: orderEvents.type, meta: orderEvents.meta, createdAt: orderEvents.createdAt })
+    .from(orderEvents)
+    .where(eq(orderEvents.orderId, row.id))
+    .orderBy(asc(orderEvents.createdAt), asc(orderEvents.id));
+
+  const first = row.itemImages[0];
+  return {
+    id: row.id,
+    status: row.status,
+    amount: row.amount,
+    shippingFee: row.shippingFee,
+    deliveryMethod: row.deliveryMethod,
+    address: row.address,
+    trackingNo: row.trackingNo,
+    rejectReason: row.rejectReason,
+    expiresAt: row.expiresAt,
+    dbNow: new Date(row.dbNow),
+    item: {
+      code: row.itemCode,
+      title: row.itemTitle,
+      image: first ? { url: first.url, alt: first.alt } : null,
+    },
+    events,
+  };
+}
+
+export type OrderStatusSnapshot = {
+  status: OrderStatus;
+  expiresAt: Date;
+  dbNow: Date;
+};
+
+/** ข้อมูลน้อยที่สุดที่ใช้ poll: สถานะ + เวลาหมดอายุ + เวลาของ DB (ไม่มี PII/สลิป/ราคา) */
+export async function getOrderStatusSnapshot(token: string): Promise<OrderStatusSnapshot | null> {
+  if (!isValidOrderToken(token)) return null;
+  const db = getDb();
+  await expireOrderIfStale(db, token);
+  const [row] = await db
+    .select({
+      status: orders.status,
+      expiresAt: orders.expiresAt,
+      dbNow: sql<Date | string>`now()`,
+    })
+    .from(orders)
+    .where(eq(orders.token, token));
+  if (!row) return null;
+  return { status: row.status, expiresAt: row.expiresAt, dbNow: new Date(row.dbNow) };
+}
+
+/** ข้อมูลที่ API ต้องใช้ตอนตรวจ token ก่อนออก Blob token / รับ pathname สลิป (ไม่ส่งออกไปที่ client) */
+export type OrderForSlip = {
+  id: string;
+  status: OrderStatus;
+  /** expires_at >= now() ตามเวลาของ DB */
+  inWindow: boolean;
+};
+
+export async function getOrderForSlip(token: string): Promise<OrderForSlip | null> {
+  if (!isValidOrderToken(token)) return null;
+  const [row] = await getDb()
+    .select({
+      id: orders.id,
+      status: orders.status,
+      inWindow: sql<boolean>`${orders.expiresAt} >= now()`,
+    })
+    .from(orders)
+    .where(eq(orders.token, token));
+  return row ?? null;
+}

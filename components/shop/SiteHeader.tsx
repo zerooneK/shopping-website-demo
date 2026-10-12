@@ -12,7 +12,8 @@ export function SiteHeader() {
         >
           Second Room
         </Link>
-        <SearchForm id="header-search" className="w-full sm:w-72" />
+        {/* มือถือ (<640px) ซ่อนช่องค้นหาใน header: หน้าแรกมีช่องใน hero อยู่แล้ว (เหลือช่องเดียวต่อจอ) */}
+        <SearchForm id="header-search" className="hidden w-full sm:block sm:w-72" />
       </div>
     </header>
   );

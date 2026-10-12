@@ -4,6 +4,13 @@ import type { Db } from "../db/client";
 import { items, orderEvents, orders } from "../db/schema";
 import type { NewOrder, Order } from "../db/schema";
 import { holdingOrderExistsSql } from "./availability";
+import {
+  decideIpRateLimit,
+  decideRateLimit,
+  type IpRateLimitCounts,
+  type RateLimitCounts,
+  type RateLimitReason,
+} from "./rate-limit";
 import { calcAmount, calcShippingFee, type CreateOrderInput } from "./validation";
 
 /**
@@ -61,6 +68,17 @@ export interface ReserveTx {
   claimItem(code: string): Promise<ClaimedItem | null>;
   insertOrder(values: NewOrder): Promise<Order>;
   insertEvents(events: NewOrderEvent[]): Promise<void>;
+  /**
+   * ล็อกระดับ demoSessionId ตลอด transaction (pg_advisory_xact_lock) เพื่อให้การ "นับแล้วจอง"
+   * ของ browser เดียวกันไม่แซงกันจนเกิน limit
+   */
+  lockSession(demoSessionId: string): Promise<void>;
+  /** นับออเดอร์ของ browser นี้ตามเวลาของ DB (ดู lib/rate-limit.ts) */
+  countSessionOrders(demoSessionId: string): Promise<RateLimitCounts>;
+  /** advisory lock ต่อ IP (hash) ตลอด transaction — ต้องเรียกก่อน lockSession เสมอ (ดูลำดับล็อกใน reserveItem) */
+  lockIp(clientIpHash: string): Promise<void>;
+  /** นับออเดอร์ของ IP (hash) นี้ตามเวลาของ DB */
+  countIpOrders(clientIpHash: string): Promise<IpRateLimitCounts>;
 }
 
 export interface ReserveStore {
@@ -71,10 +89,17 @@ export interface ReserveStore {
 export type ReserveResult =
   | { ok: true; order: Order }
   /** ตอบ 409 "มีคนจองตัดหน้าไปแล้ว" */
-  | { ok: false; reason: "unavailable" };
+  | { ok: false; reason: "unavailable" }
+  /** ตอบ 429 — เกิน limit ต่อ IP / ต่อ browser */
+  | { ok: false; reason: RateLimitReason };
 
 export type ReserveOptions = {
   generateToken?: () => string;
+  /**
+   * HMAC ของ IP ผู้สั่ง (lib/client-ip.ts) — route ต้องส่งเสมอ ("unknown" ก็ถูก hash เป็น bucket เดียว)
+   * ถ้าไม่ส่ง (เฉพาะเทสต์ระดับ logic) จะข้ามชั้น IP แต่ชั้น browser ยังทำงาน
+   */
+  clientIpHash?: string | null;
 };
 
 export function generateOrderToken(): string {
@@ -90,6 +115,26 @@ export async function reserveItem(
   const generateToken = opts.generateToken ?? generateOrderToken;
 
   return store.transaction(async (tx) => {
+    // 0) rate limit 2 ชั้น (ต่อ IP, ต่อ browser) (SPEC §7) — ใน transaction เดียวกับการจอง ใช้ now() ของ DB
+    //    ถ้าไม่ผ่านจะไม่แตะสินค้า/ออเดอร์ใดๆ
+    //
+    //    ลำดับการล็อก (advisory lock) ตายตัวเสมอ: IP → session เพื่อกัน deadlock
+    //    (ทุก transaction ขอล็อกตามลำดับเดียวกัน จึงไม่เกิดวงรอกัน) ล็อกทั้งหมดเป็นแบบ xact
+    //    ปล่อยเองเมื่อ commit/rollback; ล็อกแถว items/orders ที่ตามมาทีหลังไม่มีใครถือแล้วรอ advisory lock
+    //    (คำสั่ง cancel/uploadSlip ไม่ใช้ advisory lock เลย)
+    const ipHash = opts.clientIpHash ?? null;
+    if (ipHash) await tx.lockIp(ipHash);
+    if (demoSessionId) await tx.lockSession(demoSessionId);
+
+    if (ipHash) {
+      const d = decideIpRateLimit(await tx.countIpOrders(ipHash));
+      if (!d.ok) return { ok: false, reason: d.reason } as const;
+    }
+    if (demoSessionId) {
+      const d = decideRateLimit(await tx.countSessionOrders(demoSessionId));
+      if (!d.ok) return { ok: false, reason: d.reason } as const;
+    }
+
     // 1) lazy expiry ของออเดอร์เก่าที่ค้างบนสินค้านี้
     const expiredIds = await tx.expireStaleOrders(input.code);
     if (expiredIds.length > 0) {
@@ -122,6 +167,7 @@ export async function reserveItem(
       // ใช้ค่าที่ DB คืนมา (now()+15 นาที) เพื่อให้ order.expires_at == items.reserved_until เป๊ะ
       expiresAt: claimed.reservedUntil,
       demoSessionId,
+      clientIpHash: ipHash,
     });
 
     await tx.insertEvents([
@@ -201,6 +247,52 @@ export function createDrizzleReserveStore(db: Db): ReserveStore {
           async insertEvents(events) {
             if (events.length === 0) return;
             await trx.insert(orderEvents).values(events);
+          },
+
+          async lockSession(demoSessionId) {
+            await trx.execute(
+              sql`SELECT pg_advisory_xact_lock(hashtextextended(${"demo_sid:" + demoSessionId}, 0))`,
+            );
+          },
+
+          async lockIp(clientIpHash) {
+            await trx.execute(
+              sql`SELECT pg_advisory_xact_lock(hashtextextended(${"client_ip:" + clientIpHash}, 0))`,
+            );
+          },
+
+          async countIpOrders(clientIpHash) {
+            const res = await trx.execute<{ holding: number; last_hour: number }>(sql`
+              SELECT
+                count(*) FILTER (
+                  WHERE status = 'awaiting_review'
+                     OR (status = 'pending_payment' AND expires_at >= now())
+                )::int AS holding,
+                count(*) FILTER (
+                  WHERE created_at > now() - interval '1 hour'
+                )::int AS last_hour
+              FROM orders
+              WHERE client_ip_hash = ${clientIpHash}
+            `);
+            const row = res.rows[0];
+            return { holding: row?.holding ?? 0, lastHour: row?.last_hour ?? 0 };
+          },
+
+          async countSessionOrders(demoSessionId) {
+            // เวลาทั้งหมดเป็น now() ของ DB
+            const res = await trx.execute<{ pending: number; last_hour: number }>(sql`
+              SELECT
+                count(*) FILTER (
+                  WHERE status = 'pending_payment' AND expires_at >= now()
+                )::int AS pending,
+                count(*) FILTER (
+                  WHERE created_at > now() - interval '1 hour'
+                )::int AS last_hour
+              FROM orders
+              WHERE demo_session_id = ${demoSessionId}
+            `);
+            const row = res.rows[0];
+            return { pending: row?.pending ?? 0, lastHour: row?.last_hour ?? 0 };
           },
         };
         return fn(tx);

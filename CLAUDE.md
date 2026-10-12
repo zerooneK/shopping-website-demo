@@ -28,6 +28,7 @@
 - OS ของผู้พัฒนา: Windows 11
 - Secret อยู่ใน `.env.local` เท่านั้น มี `.env.example` เป็นแม่แบบ
 - ห้าม deploy / push / สร้างทรัพยากรบนบริการภายนอก โดยไม่ผ่านผู้ใช้
+- **ห้ามฆ่า process ตามชื่อ** (`taskkill /IM node.exe`, `pkill node`, `Stop-Process -Name node` ฯลฯ) เพราะปิดโปรแกรมอื่นของผู้ใช้ด้วย — ให้หยุดเฉพาะ process ที่ตัวเองเปิด ด้วย PID ของมัน (หรือใช้ preview_stop / ให้ Playwright `webServer` จัดการเอง) ถ้าหา PID ไม่ได้ ให้รายงานแทนการฆ่า
 
 ## รูปแบบ `docs/BUILD_LOG.md`
 เพิ่มต่อท้ายเสมอ ห้ามแก้รายการเก่า:

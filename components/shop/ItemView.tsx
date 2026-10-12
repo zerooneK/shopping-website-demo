@@ -74,20 +74,21 @@ export function ItemView({ item, live }: { item: PublicItem; live: LiveStatus | 
                 <h2 id="credit-heading" className="meta meta-th">
                   เครดิตภาพ
                 </h2>
-                <ul className="mt-2 space-y-1 text-sm text-muted">
+                <ul className="mt-1 text-sm text-muted">
                   {item.images.map((img, i) =>
                     img.credit ? (
-                      <li key={img.url}>
-                        รูปที่ {i + 1} — ภาพโดย{" "}
+                      <li key={img.url} className="flex min-h-11 flex-wrap items-center gap-x-1">
+                        <span>รูปที่ {i + 1} — ภาพโดย</span>
+                        {/* hit area สูง >= 44px: ขยายด้วย min-h + padding แนวตั้ง โดยหน้าตายังเป็นลิงก์ขีดเส้นใต้ธรรมดา */}
                         <a
                           href={img.credit.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-ink underline underline-offset-4"
+                          className="inline-flex min-h-11 items-center text-ink underline underline-offset-4"
                         >
                           {img.credit.name}
-                        </a>{" "}
-                        บน Unsplash
+                        </a>
+                        <span>บน Unsplash</span>
                       </li>
                     ) : null,
                   )}

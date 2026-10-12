@@ -1,20 +1,27 @@
 import { sql, type SQL } from "drizzle-orm";
 
 /**
- * นิยามเดียวของ "สินค้าชิ้นนี้ยังมีออเดอร์ถืออยู่หรือไม่" — ใช้ร่วมกันระหว่าง
+ * นิยามเดียวของ "ออเดอร์ที่ถือสินค้าอยู่" (อ้างตาราง orders ด้วย alias `o`)
+ * awaiting_review / confirmed / shipped / completed หรือ pending_payment ที่ expires_at >= now()
+ * (เวลาใช้ now() ของ DB เสมอ) — ใช้ใน holdingOrderExistsSql (claimItem + หน้าร้าน)
+ * ห้ามเขียนเงื่อนไขนี้ซ้ำที่อื่น
+ */
+function holdingOrderCondition(): SQL {
+  return sql`(o.status IN ('awaiting_review', 'confirmed', 'shipped', 'completed')
+           OR (o.status = 'pending_payment' AND o.expires_at >= now()))`;
+}
+
+/**
+ * "สินค้าชิ้นนี้ยังมีออเดอร์ถืออยู่หรือไม่" — ใช้ร่วมกันระหว่าง
  *  - claimItem ใน lib/reserve.ts (กฎจอง: NOT EXISTS)
  *  - lib/items.ts (ปรับสถานะที่แสดงบนหน้าร้านให้ตรงกับกฎจอง)
  * เพื่อไม่ให้หน้าร้านบอก "ว่าง" ทั้งที่จองไม่ได้ (หรือกลับกัน)
- *
- * ออเดอร์ที่ถือสินค้า: awaiting_review / confirmed / shipped / completed
- * หรือ pending_payment ที่ expires_at >= now()   (เวลาใช้ now() ของ DB เสมอ)
  */
 export function holdingOrderExistsSql(itemIdRef: SQL): SQL {
   return sql`EXISTS (
     SELECT 1 FROM orders o
     WHERE o.item_id = ${itemIdRef}
-      AND (o.status IN ('awaiting_review', 'confirmed', 'shipped', 'completed')
-           OR (o.status = 'pending_payment' AND o.expires_at >= now()))
+      AND ${holdingOrderCondition()}
   )`;
 }
 

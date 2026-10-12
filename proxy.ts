@@ -1,11 +1,12 @@
 import { and, eq, ne } from "drizzle-orm";
 import { NextResponse, type NextRequest } from "next/server";
 import { getDb } from "./db/client";
-import { items } from "./db/schema";
+import { items, orders } from "./db/schema";
+import { isValidOrderToken } from "./lib/orders/view";
 import { itemCodeSchema } from "./lib/validation";
 
 /**
- * ตอบ HTTP 404 จริงสำหรับ /item/[code] ที่ไม่มีสินค้า
+ * ตอบ HTTP 404 จริงสำหรับ /item/[code], /checkout/[code] ที่ไม่มีสินค้า และ /order/[token] ที่ไม่มีออเดอร์
  *
  * เหตุผล: ภายใต้ Cache Components หน้านี้ส่ง static shell ก่อน แล้วค่อยรัน notFound() ใน
  * หน้า → status ถูกล็อกเป็น 200 (+ noindex) ตามเอกสาร Next 16 ("Status codes" ใน loading.md)
@@ -31,26 +32,44 @@ async function itemExists(code: string): Promise<boolean> {
   return true;
 }
 
-export async function proxy(request: NextRequest) {
-  const raw = request.nextUrl.pathname.split("/")[2] ?? "";
-  const parsed = itemCodeSchema.safeParse(decodeURIComponent(raw));
+async function orderExists(token: string): Promise<boolean> {
+  // ไม่ memo: ออเดอร์ถูกลบได้ทุกวัน (cron reset) และต้องการคำตอบสดทุกครั้ง (query เดียวผ่าน unique index)
+  const rows = await getDb()
+    .select({ id: orders.id })
+    .from(orders)
+    .where(eq(orders.token, token))
+    .limit(1);
+  return rows.length > 0;
+}
 
-  let exists = parsed.success;
-  if (parsed.success) {
-    try {
-      exists = await itemExists(parsed.data);
-    } catch {
-      return NextResponse.next(); // fail open
+export async function proxy(request: NextRequest) {
+  const [, section, rawParam = ""] = request.nextUrl.pathname.split("/");
+  let param = rawParam;
+  try {
+    param = decodeURIComponent(rawParam);
+  } catch {
+    // %-encoding เสีย → ถือว่าไม่ตรงรูปแบบ (ตกไป 404 ด้านล่าง)
+  }
+
+  let exists: boolean;
+  try {
+    if (section === "order") {
+      exists = isValidOrderToken(param) && (await orderExists(param));
+    } else {
+      const parsed = itemCodeSchema.safeParse(param);
+      exists = parsed.success && (await itemExists(parsed.data));
     }
+  } catch {
+    return NextResponse.next(); // fail open
   }
   if (exists) return NextResponse.next();
 
   // rewrite ไปเส้นทางที่ไม่มีอยู่ → Next เรนเดอร์ not-found.tsx ด้วย status 404
   const url = request.nextUrl.clone();
-  url.pathname = "/__item-not-found";
+  url.pathname = "/__not-found";
   return NextResponse.rewrite(url);
 }
 
 export const config = {
-  matcher: "/item/:code",
+  matcher: ["/item/:code", "/checkout/:code", "/order/:token"],
 };
