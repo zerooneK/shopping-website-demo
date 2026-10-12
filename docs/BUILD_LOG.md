@@ -43,3 +43,14 @@
 - ผล: ผ่าน · seed 12 ชิ้นขึ้น Neon · 105 unit tests
 - ปัญหาที่เจอ: รอบแรก Builder เลือกรูปจากชื่อ/แท็กโดยไม่ได้ดูภาพ → 6 รูปไม่ตรงปก (ยีนส์แทนเสื้อ, ห้องสมุดแทนหนังสือ, แก้วมีสโลแกน ฯลฯ) → ส่งกลับให้ดูภาพจริงก่อนเลือก · หารูปเสื้อลายทางไม่ได้ จึงแก้ชื่อ/คำบรรยาย A002 ให้ตรงกับรูป และปรับ A003 เป็น "กล้องฟิล์มวินเทจ" เพราะรูปเป็น Rolleiflex
 - บทเรียน: งานเลือกรูปต้องมี step ดูภาพจริง ไม่เชื่อชื่อ/แท็ก
+
+## 2026-10-13 · ขั้น 3b-1 · shop-builder (sonnet · medium)
+- งาน: ระบบดีไซน์ (tokens light/dark ผูก Tailwind 4, ฟอนต์ 4 ตัวผ่าน next/font, focus ring, reduced-motion, ไม่มีมุมโค้ง/เงา) · layout หลัก (แถบเดโม, header+ค้นหารหัส, footer, not-found, metadata ไทย) · `lib/items.ts` (server-only) + `lib/availability.ts` (นิยาม "ออเดอร์ถือสินค้า" ร่วมกับ claimItem ใน reserve.ts) · หน้าแรก (hero, กรองหมวด, grid แบบนิตยสาร, การ์ด, SOLD/จองอยู่) · `/item/[code]` (gallery scroll-snap, ตำหนิแยกบล็อก, เครดิตภาพ, CTA sticky + นับถอยหลัง, generateMetadata/OG) · `/search` route handler (normalize รหัส → 307) · `proxy.ts` ตอบ 404 จริงให้รหัสที่ไม่มี · SafeImage (onError → รูปสำรอง) · เพิ่ม unit test 8 ข้อ (availability + labels)
+- caching: เนื้อหาสินค้า `'use cache'` + tag "items" (revalidate 5 นาที); สถานะ available/reserved/sold อ่านสดทุก request (connection() + now() ของ DB) · หน้า `/item/[code]` ตั้ง `instant = false` (blocking) เพราะต้อง await params ก่อน stream
+- ผล: ผ่าน (lint, typecheck, test, test:integration, build) · ตรวจ curl บน `next start`: `/` และ `/item/A001` = 200 มีข้อมูลจริง, `/item/Z999` = 404, ค้นหา `#12` → 307 /item/A012 · ปรับสถานะใน Neon ชั่วคราว (sold/reserved+นับถอยหลัง/reserved หมดเวลาไม่มีออเดอร์=ว่าง/reserved หมดเวลามีออเดอร์รอสลิป=ยังจอง/hidden=404) แล้วคืนด้วย db:seed · ดูด้วยตาที่ 375px/1280px ทั้ง dark/light ไม่มี horizontal scroll
+- ปัญหาที่เจอ / การ escalate: ภายใต้ Cache Components `notFound()` ในหน้าคืน status 200 (+noindex) เพราะ shell ถูกส่งก่อน จึงเพิ่ม proxy.ts ตรวจรหัสก่อน render · ต้องเพิ่ม `.env.local` ให้มี DEMO_MODE=true เพื่อแสดงแถบเดโม · หลังบ้าน (3c) ต้องเรียก revalidateTag("items") หลังแก้สินค้า
+
+## 2026-10-13 · ขั้น 3b-1 · orchestrator ตรวจรับ
+- ตรวจเอง: unit 113 · integration 9/9 (Neon จริง) · lint · typecheck · ดูหน้าในเบราว์เซอร์ที่ 1280px และ 375px (ไม่มี horizontal scroll)
+- ข้อสังเกตที่ต้องแก้ใน 3b-2: บนมือถือมีช่องค้นหารหัสซ้อน 2 ช่อง (header + hero) ดันสินค้าตกจอแรก · ลิงก์เครดิตช่างภาพสูง 23px (< 44px) · Next dev indicator ซ้อนปุ่ม CTA (เฉพาะ dev)
+- หมายเหตุ: Builder ดึง NOT EXISTS ของ claimItem ไปเป็น `holdingOrderExistsSql` ให้หน้าเว็บกับระบบจองใช้นิยามเดียวกัน (SQL เท่าเดิม integration ผ่าน) · proxy.ts ทำหน้าที่คืน 404 จริงให้ /item/[code] ภายใต้ Cache Components — 3c ถ้าจะทำ auth ด้วย proxy ต้องรวมไฟล์เดียวกัน

@@ -3,6 +3,7 @@ import { and, eq, lt, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { items, orderEvents, orders } from "../db/schema";
 import type { NewOrder, Order } from "../db/schema";
+import { holdingOrderExistsSql } from "./availability";
 import { calcAmount, calcShippingFee, type CreateOrderInput } from "./validation";
 
 /**
@@ -180,12 +181,7 @@ export function createDrizzleReserveStore(db: Db): ReserveStore {
                 AND (status = 'available'
                      OR (status = 'reserved'
                          AND reserved_until < now()
-                         AND NOT EXISTS (
-                           SELECT 1 FROM orders o
-                           WHERE o.item_id = items.id
-                             AND (o.status IN ('awaiting_review', 'confirmed', 'shipped', 'completed')
-                                  OR (o.status = 'pending_payment' AND o.expires_at >= now()))
-                         )))
+                         AND NOT ${holdingOrderExistsSql(sql`items.id`)}))
               RETURNING id, price, reserved_until
             `);
             const row = res.rows[0];

@@ -1,26 +1,147 @@
 @import "tailwindcss";
 
+/* Design tokens — Editorial Minimal (SPEC §8) */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --paper: #f4f1ea;
+  --ink: #151413;
+  --muted: #6e6a63;
+  --rule: #d9d4c9;
+  --accent: #b4441f;
+  color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --paper: #121110;
+    --ink: #ede9e1;
+    --muted: #9a958c;
+    --rule: #2c2a27;
+    --accent: #e0703f;
+    color-scheme: dark;
   }
 }
 
+@theme inline {
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-rule: var(--rule);
+  --color-accent: var(--accent);
+
+  /* ฟอนต์: ละติน Instrument Serif, ไทย Noto Serif Thai (fallback ระดับตัวอักษร) */
+  --font-display: var(--font-instrument), var(--font-noto-thai), "Times New Roman", serif;
+  --font-sans: var(--font-plex-thai), system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), var(--font-plex-thai), ui-monospace, monospace;
+
+  --text-hero: clamp(3rem, 2rem + 6.2vw, 7.5rem);
+  --text-display: clamp(2.25rem, 1.6rem + 3.4vw, 4.5rem);
+}
+
+html {
+  background: var(--paper);
+  scroll-behavior: smooth;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+}
+
+/* ไม่มีมุมโค้ง/เงา — ใช้เส้นคั่นบาง 1px */
+*,
+*::before,
+*::after {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  border-color: var(--rule);
+}
+
+/* focus ring ชัดเจน */
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--paper);
+}
+
+/* ตัวอักษรเมตา: mono ตัวพิมพ์ใหญ่ ระยะห่างกว้าง */
+.meta {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* สีเริ่มต้นของ meta ใช้ :where เพื่อให้ utility (text-ink ฯลฯ) override ได้ */
+:where(.meta) {
+  color: var(--muted);
+}
+
+/* ข้อความไทยในบริบท meta: ระยะห่างน้อยลงเพื่อไม่ให้สระ/วรรณยุกต์แตกห่าง */
+.meta-th {
+  letter-spacing: 0.06em;
+}
+
+.display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: 1.18; /* ภาษาไทยมีสระ/วรรณยุกต์ซ้อน ต้องการระยะบรรทัดมากกว่าละติน */
+  letter-spacing: -0.01em;
+}
+
+/* touch target ≥ 44px */
+.tap {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* motion เบา — fade/slide 200ms */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rise {
+  animation: rise 200ms ease-out both;
+}
+
+/* view transition ระหว่าง grid กับหน้าสินค้า */
+@view-transition {
+  navigation: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  @view-transition {
+    navigation: none;
+  }
+}
+
+/* gallery: ซ่อน scrollbar แต่ยังปัดได้ */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
