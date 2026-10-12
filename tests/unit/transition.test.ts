@@ -43,9 +43,20 @@ describe("transition: valid paths", () => {
     expect(r).toMatchObject({ ok: true, to: "expired", itemStatus: "available", actor: "system" });
   });
 
-  it("expire exactly at expiresAt is allowed", () => {
-    const r = transition(order("pending_payment"), { type: "expire", now: EXPIRES });
-    expect(r.ok).toBe(true);
+  it("expire 1ms after expiresAt is allowed; exactly at expiresAt is not (strict, same as SQL)", () => {
+    const after = new Date(EXPIRES.getTime() + 1);
+    expect(transition(order("pending_payment"), { type: "expire", now: after }).ok).toBe(true);
+    expect(transition(order("pending_payment"), { type: "expire", now: EXPIRES })).toEqual({
+      ok: false,
+      error: "not_yet_expired",
+    });
+  });
+
+  it("upload_slip tells the caller to clear items.reserved_until; other events do not", () => {
+    const up = transition(order("pending_payment"), { type: "upload_slip", now: BEFORE });
+    expect(up).toMatchObject({ ok: true, clearReservedUntil: true });
+    const cancel = transition(order("pending_payment"), { type: "cancel", now: BEFORE });
+    expect(cancel).toMatchObject({ ok: true, clearReservedUntil: false });
   });
 
   it("awaiting_review --confirm--> confirmed (item sold)", () => {
@@ -80,9 +91,13 @@ describe("transition: rejected cases", () => {
     expect(r).toEqual({ ok: false, error: "payment_window_closed" });
   });
 
-  it("rejects upload_slip exactly at expiresAt", () => {
-    const r = transition(order("pending_payment"), { type: "upload_slip", now: EXPIRES });
-    expect(r).toEqual({ ok: false, error: "payment_window_closed" });
+  it("rejects upload_slip 1ms after expiresAt; exactly at expiresAt still allowed (strict)", () => {
+    const after = new Date(EXPIRES.getTime() + 1);
+    expect(transition(order("pending_payment"), { type: "upload_slip", now: after })).toEqual({
+      ok: false,
+      error: "payment_window_closed",
+    });
+    expect(transition(order("pending_payment"), { type: "upload_slip", now: EXPIRES }).ok).toBe(true);
   });
 
   it("rejects expire before expiresAt", () => {

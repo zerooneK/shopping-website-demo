@@ -11,3 +11,14 @@
 - งาน: scaffold Next.js 16 (App Router) + TS strict + Tailwind 4 ลง shop-website, ติดตั้ง deps ตาม SPEC §2 (drizzle-orm, @neondatabase/serverless, drizzle-kit, zod, jose, @vercel/blob, promptpay-qr, qrcode, vitest, tsx), `db/schema.ts` + `db/client.ts` + `drizzle.config.ts` + migration แรก + `db/seed.ts`/`seed-data.json` (2 รายการชั่วคราว), `lib/orders/transition.ts`, `lib/reserve.ts` (logic แยกจาก DB ผ่าน interface ReserveStore + ตัว Drizzle จริง), `lib/validation.ts`, `lib/promptpay.ts`, scripts lint/typecheck/test/build, `.env.example`, `git init` (ไม่ push)
 - ผล: ผ่าน (npm run lint, typecheck, test = 95 tests, build) · ส่วน SQL จริงของ reserve (UPDATE ... RETURNING บน Neon), seed และ migration ยังไม่ได้ทดสอบกับ DB จริง
 - ปัญหาที่เจอ / การ escalate: ไม่มีการ escalate · ต้องยก @types/node เป็น ^24 เพราะ vitest 5 ขัด peer dep กับ ^20 · .gitignore ของ scaffold ซ่อน .env* จึงเพิ่ม !.env.example
+
+## 2026-10-12 · ขั้น 3a-fix · shop-builder (sonnet · medium)
+- งาน: แก้ผลรีวิว 3a — [High] claimItem เพิ่ม AND NOT EXISTS (ออเดอร์ awaiting_review/confirmed/shipped/completed หรือ pending_payment ที่ expires_at >= now()) กันแย่งสินค้าที่จ่ายแล้ว + transition() คืน `clearReservedUntil: true` สำหรับ upload_slip (สัญญา: handler 3c ต้องล้าง items.reserved_until เป็น NULL ใน tx เดียวกับการอัปเดตออเดอร์ บันทึกใน ReserveTx) · [Medium] SQL ใช้ now() ของ DB ทั้งหมด (reserved_until = now()+make_interval(mins), reserved_until < now(), expires_at < now(), updated_at = now()), RETURNING id, price, reserved_until แล้วใช้เป็น expiresAt; ตัด now/until ออกจาก ReserveTx/ReserveOptions, in-memory store มีนาฬิกาในตัว · [Low] ขอบเวลา: ใช้ strict ตาม SPEC (หมดอายุเมื่อ now > expiresAt) ทั้ง transition() และ SQL + เทสต์เทียบ bulk expire กับ transition(expire) ที่ -1/0/+1ms · [Low] rollback ของ in-memory store ย้อนเฉพาะ write log ของ tx นั้น
+- ผล: ผ่าน (npm run lint, typecheck, test = 105 tests, build) · SQL จริง (NOT EXISTS, make_interval, RETURNING reserved_until, การแปลงชนิดของ reserved_until จาก driver) ยังไม่ได้ทดสอบกับ DB จริง
+- ปัญหาที่เจอ / การ escalate: ไม่มี · เปลี่ยนขอบเวลา upload_slip ที่ now == expiresAt จาก "ปิดแล้ว" เป็น "ยังอัปได้" เพื่อให้ตรง SPEC (< now())
+
+## 2026-10-12 · ขั้น 3a-review · shop-reviewer (opus · medium → low)
+- งาน: รีวิวระบบจอง/state machine ของขั้น 3a แล้วตรวจซ้ำหลังแก้
+- ผล: รอบแรก FAIL (1 High, 1 Medium, 2 Low) → รอบสอง (low) PASS · 105 tests
+- ปัญหาที่เจอ: High = `claimItem` จองทับสินค้าที่ออเดอร์ `awaiting_review` ถืออยู่ได้ (ขายซ้ำ) เพราะเทสต์เดิม assert หลวม · แก้ด้วย `NOT EXISTS` + ล้าง `reserved_until` ตอนอัปสลิป + ใช้ `now()` ของ DB
+- ข้อจำกัด: SQL จริงยังไม่ได้ทดสอบกับ Postgres/Neon ต้องทำ integration test ก่อน deploy · handler อัปสลิป (3c) ต้องล้าง `reserved_until` ตามสัญญา

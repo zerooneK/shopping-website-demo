@@ -46,6 +46,11 @@ export type TransitionResult =
       actor: Actor;
       /** สถานะสินค้าที่ต้องเป็นหลัง transition */
       itemStatus: ItemStatus;
+      /**
+       * true = ผู้เรียกต้องตั้ง items.reserved_until = NULL ใน transaction เดียวกับการอัปเดตออเดอร์
+       * (upload_slip: เลิกนับเวลา ไม่ให้ใครแย่งสินค้าที่จ่ายแล้วด้วย lazy expiry — SPEC §5)
+       */
+      clearReservedUntil: boolean;
       eventType: OrderEventType;
       meta: Record<string, unknown>;
     }
@@ -87,7 +92,9 @@ export function transition(
   }
 
   const { status } = order;
-  const expired = event.now.getTime() >= order.expiresAt.getTime();
+  // นิยามเดียวกับ SQL (SPEC §5): หมดอายุเมื่อ now > expiresAt (strict)
+  // bulk expire ใน reserve.ts (expires_at < now()) จึงเทียบเท่า transition(..., "expire")
+  const expired = event.now.getTime() > order.expiresAt.getTime();
   const meta: Record<string, unknown> = {};
   let to: OrderStatus;
 
@@ -165,6 +172,7 @@ export function transition(
     to,
     actor,
     itemStatus: itemStatusFor(to),
+    clearReservedUntil: to === "awaiting_review",
     eventType: event.type,
     meta,
   };

@@ -15,7 +15,12 @@ import { calcAmount, calcShippingFee, type CreateOrderInput } from "./validation
 
 export const RESERVE_MINUTES = 15;
 
-export type ClaimedItem = { id: number; price: number };
+export type ClaimedItem = {
+  id: number;
+  price: number;
+  /** ค่า reserved_until ที่ DB คำนวณจาก now() + 15 นาที — ใช้เป็น expiresAt ของออเดอร์ */
+  reservedUntil: Date;
+};
 
 export type NewOrderEvent = {
   orderId: string;
@@ -24,20 +29,35 @@ export type NewOrderEvent = {
   meta?: Record<string, unknown>;
 };
 
-/** การดำเนินการภายใน transaction เดียว */
+/**
+ * การดำเนินการภายใน transaction เดียว
+ *
+ * เวลาทั้งหมดใช้ `now()` ของ DB เท่านั้น (SPEC §5 ข้อ 1) ไม่รับเวลาจากแอป เพราะ clock ของ
+ * serverless instance แต่ละตัวอาจเหลื่อมกัน ทำให้จอง/หมดอายุผิดจังหวะ
+ *
+ * นิยามหมดอายุ (ตรงกับ SPEC และ transition()): "หมดอายุ" คือ `now() > expiresAt` (strict)
+ * ดังนั้นที่ `now() == expiresAt` ยังอัปสลิปได้ และยังไม่ถูกแย่งสินค้า
+ *
+ * สัญญากับ handler ขั้น 3c: เมื่อ transition() คืน `clearReservedUntil: true` (upload_slip)
+ * handler ต้องตั้ง items.reserved_until = NULL ใน transaction เดียวกับการอัปเดตออเดอร์
+ * (claimItem ป้องกันซ้ำอีกชั้นด้วย NOT EXISTS แต่ห้ามพึ่งชั้นเดียว)
+ */
 export interface ReserveTx {
   /**
-   * lazy expiry: mark ออเดอร์ pending_payment ของสินค้านี้ที่เลยเวลา (expiresAt < now)
-   * เป็น expired แล้วคืน id ของออเดอร์เหล่านั้น
+   * lazy expiry: mark ออเดอร์ pending_payment ของสินค้านี้ที่ `expires_at < now()` เป็น expired
+   * แล้วคืน id ของออเดอร์เหล่านั้น — เทียบเท่า transition(order, "expire") แบบ bulk
+   * (transition ถือว่าหมดอายุเมื่อ now > expiresAt เช่นเดียวกัน)
    */
-  expireStaleOrders(code: string, now: Date): Promise<string[]>;
+  expireStaleOrders(code: string): Promise<string[]>;
   /**
    * คำสั่งเดียวแบบ compare-and-set:
-   * UPDATE items SET status='reserved', reserved_until=$until
-   * WHERE code=$code AND (status='available' OR (status='reserved' AND reserved_until < $now))
-   * RETURNING id, price     — ไม่มีแถวคืน = null
+   * UPDATE items SET status='reserved', reserved_until=now()+'15 min'
+   * WHERE code=$code AND (status='available' OR (status='reserved' AND reserved_until < now()
+   *   AND NOT EXISTS (ออเดอร์ที่ยังถือสินค้านี้อยู่: awaiting_review/confirmed/shipped/completed
+   *                   หรือ pending_payment ที่ expires_at >= now())))
+   * RETURNING id, price, reserved_until   — ไม่มีแถวคืน = null
    */
-  claimItem(code: string, now: Date, until: Date): Promise<ClaimedItem | null>;
+  claimItem(code: string): Promise<ClaimedItem | null>;
   insertOrder(values: NewOrder): Promise<Order>;
   insertEvents(events: NewOrderEvent[]): Promise<void>;
 }
@@ -53,7 +73,6 @@ export type ReserveResult =
   | { ok: false; reason: "unavailable" };
 
 export type ReserveOptions = {
-  now?: Date;
   generateToken?: () => string;
 };
 
@@ -67,13 +86,11 @@ export async function reserveItem(
   demoSessionId: string | null = null,
   opts: ReserveOptions = {},
 ): Promise<ReserveResult> {
-  const now = opts.now ?? new Date();
-  const until = new Date(now.getTime() + RESERVE_MINUTES * 60_000);
   const generateToken = opts.generateToken ?? generateOrderToken;
 
   return store.transaction(async (tx) => {
     // 1) lazy expiry ของออเดอร์เก่าที่ค้างบนสินค้านี้
-    const expiredIds = await tx.expireStaleOrders(input.code, now);
+    const expiredIds = await tx.expireStaleOrders(input.code);
     if (expiredIds.length > 0) {
       await tx.insertEvents(
         expiredIds.map((orderId) => ({
@@ -85,7 +102,7 @@ export async function reserveItem(
     }
 
     // 2) จองด้วยคำสั่งเดียว — สำเร็จได้ครั้งเดียวต่อชิ้น
-    const claimed = await tx.claimItem(input.code, now, until);
+    const claimed = await tx.claimItem(input.code);
     if (!claimed) return { ok: false, reason: "unavailable" } as const;
 
     // 3) ราคา/ค่าส่งคำนวณฝั่ง server จากราคาใน DB เท่านั้น
@@ -101,7 +118,8 @@ export async function reserveItem(
       address: input.deliveryMethod === "post" ? (input.address ?? null) : null,
       note: input.note ?? null,
       status: "pending_payment",
-      expiresAt: until,
+      // ใช้ค่าที่ DB คืนมา (now()+15 นาที) เพื่อให้ order.expires_at == items.reserved_until เป๊ะ
+      expiresAt: claimed.reservedUntil,
       demoSessionId,
     });
 
@@ -124,14 +142,14 @@ export function createDrizzleReserveStore(db: Db): ReserveStore {
     transaction: (fn) =>
       db.transaction(async (trx) => {
         const tx: ReserveTx = {
-          async expireStaleOrders(code, now) {
+          async expireStaleOrders(code) {
             const rows = await trx
               .update(orders)
-              .set({ status: "expired", updatedAt: now })
+              .set({ status: "expired", updatedAt: sql`now()` })
               .where(
                 and(
                   eq(orders.status, "pending_payment"),
-                  lt(orders.expiresAt, now),
+                  lt(orders.expiresAt, sql`now()`),
                   eq(
                     orders.itemId,
                     trx
@@ -145,16 +163,38 @@ export function createDrizzleReserveStore(db: Db): ReserveStore {
             return rows.map((r) => r.id);
           },
 
-          async claimItem(code, now, until) {
-            const res = await trx.execute<{ id: number; price: number }>(sql`
+          async claimItem(code) {
+            // เวลาทั้งหมดมาจาก now() ของ DB ไม่ใช่ของแอป
+            // NOT EXISTS: กันแย่งสินค้าที่ลูกค้าจ่ายแล้ว (awaiting_review ฯลฯ) แม้ reserved_until
+            // จะค้างเป็นเวลาในอดีต — ป้องกันตัวเองโดยไม่พึ่งว่า handler ล้าง reserved_until แล้ว
+            const res = await trx.execute<{
+              id: number;
+              price: number;
+              reserved_until: Date | string;
+            }>(sql`
               UPDATE items
-              SET status = 'reserved', reserved_until = ${until}, updated_at = ${now}
+              SET status = 'reserved',
+                  reserved_until = now() + make_interval(mins => ${RESERVE_MINUTES}),
+                  updated_at = now()
               WHERE code = ${code}
                 AND (status = 'available'
-                     OR (status = 'reserved' AND reserved_until < ${now}))
-              RETURNING id, price
+                     OR (status = 'reserved'
+                         AND reserved_until < now()
+                         AND NOT EXISTS (
+                           SELECT 1 FROM orders o
+                           WHERE o.item_id = items.id
+                             AND (o.status IN ('awaiting_review', 'confirmed', 'shipped', 'completed')
+                                  OR (o.status = 'pending_payment' AND o.expires_at >= now()))
+                         )))
+              RETURNING id, price, reserved_until
             `);
-            return res.rows[0] ?? null;
+            const row = res.rows[0];
+            if (!row) return null;
+            return {
+              id: row.id,
+              price: row.price,
+              reservedUntil: new Date(row.reserved_until),
+            };
           },
 
           async insertOrder(values) {
@@ -171,4 +211,3 @@ export function createDrizzleReserveStore(db: Db): ReserveStore {
       }),
   };
 }
-
