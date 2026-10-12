@@ -1,0 +1,28 @@
+[
+  {
+    "code": "A001",
+    "title": "ตัวอย่าง: แจ็กเก็ตยีนส์วินเทจ",
+    "description": "รายการตัวอย่างชั่วคราว Writer จะเติมข้อมูลจริงในขั้น 4",
+    "flaws": "ไม่มีตำหนิที่สังเกตเห็น",
+    "condition": "good",
+    "category": "fashion",
+    "price": 450,
+    "images": [
+      { "url": "https://images.unsplash.com/placeholder-a001", "alt": "แจ็กเก็ตยีนส์ (ตัวอย่าง)" }
+    ],
+    "sortOrder": 1
+  },
+  {
+    "code": "A002",
+    "title": "ตัวอย่าง: นิยายปกแข็งสภาพสะสม",
+    "description": "รายการตัวอย่างชั่วคราว Writer จะเติมข้อมูลจริงในขั้น 4",
+    "flaws": "ขอบปกมีรอยครูดเล็กน้อย",
+    "condition": "like_new",
+    "category": "books",
+    "price": 220,
+    "images": [
+      { "url": "https://images.unsplash.com/placeholder-a002", "alt": "นิยายปกแข็ง (ตัวอย่าง)" }
+    ],
+    "sortOrder": 2
+  }
+]
