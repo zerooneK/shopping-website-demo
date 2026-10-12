@@ -27,3 +27,19 @@
 - งาน: เพิ่ม integration test กับ Postgres (Neon) จริง `tests/integration/reserve.pg.test.ts` + `vitest.integration.config.mts` + script `npm run test:integration` (โหลด .env.local ผ่าน `node --env-file`, ไม่รวมใน `npm test`, skip พร้อมข้อความถ้าไม่มี DATABASE_URL) · ใช้ createDrizzleReserveStore + getDb ตัวจริง · ข้อมูลทดสอบใช้รหัส T901-T999 ลบเฉพาะของตัวเองก่อน/หลังรัน · ครอบคลุม: (a) จองพร้อมกัน 20 ราย สำเร็จ 1 (b) สถานการณ์ X/Y หลังอัปสลิป ทั้ง reserved_until อดีตและ NULL (c) lazy expiry + event (d) confirmed/shipped/completed ไม่ถูกจองทับ (e) now()+15 นาที และ expires_at == reserved_until (f) rollback เมื่อ UNIQUE token ล้ม รวม lazy expiry ถูกย้อน
 - ผล: ผ่าน (test:integration = 9 tests บน Neon จริง, lint, typecheck, test = 105, build) · ตรวจแล้วไม่มีแถว T9xx ค้าง และ seed เดิมยังอยู่
 - ปัญหาที่เจอ / การ escalate: ไม่พบบั๊กใน lib/reserve.ts · ข้อจำกัด: ยังไม่ได้ทดสอบ handler อัปสลิป (3c) และ cron
+
+## 2026-10-12 · ขั้น 4b · shop-builder (sonnet · medium)
+- งาน: ใส่รูปจริงจาก Unsplash (free ไม่ใช่ Unsplash+) ให้สินค้าเดโม A001-A012 ชิ้นละ 3 รูปใน `db/seed-data.json` พร้อม alt ภาษาไทยและ credit ช่างภาพ · ลบ field `_imageQuery` · ไม่มี URL ซ้ำ (36 รูป) · ตรวจทุก URL ด้วย curl ได้ 200 image/* ครบ 36/36
+- ผล: ผ่าน (`npm run db:seed` = seeded 12 items, `npm test` = 105 tests)
+- ปัญหาที่เจอ / การ escalate: A002 ไม่พบรูปเสื้อลินินลายทางแบบไม่มีคนที่ตรงเป๊ะ ใช้เสื้อเชิ้ต/เสื้อลายทางใกล้เคียง · A005 รูปที่ 3 เป็นตะเกียงทองเหลือง (ไม่ใช่โคมตั้งโต๊ะ) · A003 รูปกล้องเป็นกล้องฟิล์มวินเทจทั่วไป ไม่ใช่คอมแพกต์โดยเฉพาะ · A004 รูปที่ 3 เป็นกองหนังสือ/ห้องสมุดทั่วไป
+
+## 2026-10-12 · ขั้น 4b-fix2 · shop-builder (sonnet · medium)
+- งาน: แทนที่รูปเดโมไม่ตรงปก 6 รูปใน `db/seed-data.json` (เฉพาะ field images) — A002 รูปที่ 2-3, A004 รูปที่ 3, A005 รูปที่ 3, A010 รูปที่ 2-3 · คราวนี้ค้นผู้สมัครจาก Unsplash แล้วดาวน์โหลดภาพตัวอย่างมาดูจริงทุกรูป (contact sheet + ภาพขยาย) ก่อนเลือก · alt/credit ตรงกับภาพที่เห็น
+- ผล: ผ่าน (JSON parse ได้ 12 ชิ้น × 3 รูป, URL ไม่ซ้ำ 36/36, curl 200 image/jpeg ครบ 6 รูปใหม่, `npm run db:seed` = seeded 12 items, `npm test` = 105 tests)
+- ปัญหาที่เจอ: ไม่พบเสื้อเชิ้ตลายทางแบบวางพับ/แขวนที่ไม่มีคน จึงใช้เสื้อลินินสีเรียบแทน (A002) · A004 รูปใหม่มีกล้องฟิล์มเป็นส่วนประกอบฉาก
+
+## 2026-10-12 · ขั้น 4 · orchestrator (sonnet) + shop-writer (haiku · low) + shop-builder (sonnet · medium)
+- งาน: Writer เขียนข้อมูลสินค้า 12 ชิ้น · Builder หารูป Unsplash 36 รูป (ตรวจ URL ด้วย curl 200) · orchestrator ดูรูปจริงทั้งหมด
+- ผล: ผ่าน · seed 12 ชิ้นขึ้น Neon · 105 unit tests
+- ปัญหาที่เจอ: รอบแรก Builder เลือกรูปจากชื่อ/แท็กโดยไม่ได้ดูภาพ → 6 รูปไม่ตรงปก (ยีนส์แทนเสื้อ, ห้องสมุดแทนหนังสือ, แก้วมีสโลแกน ฯลฯ) → ส่งกลับให้ดูภาพจริงก่อนเลือก · หารูปเสื้อลายทางไม่ได้ จึงแก้ชื่อ/คำบรรยาย A002 ให้ตรงกับรูป และปรับ A003 เป็น "กล้องฟิล์มวินเทจ" เพราะรูปเป็น Rolleiflex
+- บทเรียน: งานเลือกรูปต้องมี step ดูภาพจริง ไม่เชื่อชื่อ/แท็ก

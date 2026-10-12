@@ -1,28 +1,506 @@
 [
   {
     "code": "A001",
-    "title": "ตัวอย่าง: แจ็กเก็ตยีนส์วินเทจ",
-    "description": "รายการตัวอย่างชั่วคราว Writer จะเติมข้อมูลจริงในขั้น 4",
-    "flaws": "ไม่มีตำหนิที่สังเกตเห็น",
+    "title": "แจ็กเก็ตยีนส์วินเทจสีซีด",
+    "description": "แจ็กเก็ตยีนส์ทรงตรงที่ผ่านการใส่มาแล้ว สีซีดลงตามเวลาจนได้โทนที่อ่อนโยน เหมาะกับเสื้อยืดสีพื้นหรือเดรสลำลองในวันอากาศเย็น ตัวผ้าอยู่ในสภาพดี ใช้งานได้จริงทุกฤดูกาล",
+    "flaws": "ซีดตรงข้อศอกและคอเสื้อ กระดุมเม็ดที่ 3 สีไม่ตรงเม็ดอื่น",
     "condition": "good",
     "category": "fashion",
-    "price": 450,
-    "images": [
-      { "url": "https://images.unsplash.com/placeholder-a001", "alt": "แจ็กเก็ตยีนส์ (ตัวอย่าง)" }
+    "price": 890,
+    "tags": [
+      "แจ็กเก็ตยีนส์",
+      "ยีนส์วินเทจ",
+      "เสื้อคลุมลำลอง",
+      "แฟชั่นมือสอง",
+      "สีซีด"
     ],
-    "sortOrder": 1
+    "images": [
+      {
+        "url": "https://images.unsplash.com/photo-1543076447-215ad9ba6923?auto=format&fit=crop&w=1200&q=80",
+        "alt": "แจ็กเก็ตยีนส์สีฟ้าซีดแขวนอยู่บนประตูสีขาว",
+        "credit": {
+          "name": "kemal alkan",
+          "url": "https://unsplash.com/@kemalalkan"
+        }
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1708523842501-1619478cea1f?auto=format&fit=crop&w=1200&q=80",
+        "alt": "แจ็กเก็ตยีนส์และกางเกงยีนส์วางบนพื้นหลังสีขาวเรียบ",
+        "credit": {
+          "name": "engin akyurt",
+          "url": "https://unsplash.com/@enginakyurt"
+        }
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1754910715932-66baa919b17f?auto=format&fit=crop&w=1200&q=80",
+        "alt": "ภาพใกล้ของแจ็กเก็ตยีนส์โทนฟ้าอมเขียว",
+        "credit": {
+          "name": "Liana S",
+          "url": "https://unsplash.com/@cherstve_pechivo"
+        }
+      }
+    ]
   },
   {
     "code": "A002",
-    "title": "ตัวอย่าง: นิยายปกแข็งสภาพสะสม",
-    "description": "รายการตัวอย่างชั่วคราว Writer จะเติมข้อมูลจริงในขั้น 4",
-    "flaws": "ขอบปกมีรอยครูดเล็กน้อย",
+    "title": "เสื้อเชิ้ตผ้าลินินสีเรียบ",
+    "description": "เสื้อเชิ้ตเนื้อลินินบางเบา ระบายอากาศดีเหมาะกับวันที่อากาศร้อน ทรงสบายไม่รัดตัว ใส่เข้ากับกางเกงขายาวหรือกระโปรงยาวได้หลายแบบ",
+    "flaws": "ไม่มีตำหนิที่สังเกตเห็น มีรอยยับตามธรรมชาติของผ้าลินิน",
     "condition": "like_new",
-    "category": "books",
-    "price": 220,
-    "images": [
-      { "url": "https://images.unsplash.com/placeholder-a002", "alt": "นิยายปกแข็ง (ตัวอย่าง)" }
+    "category": "fashion",
+    "price": 420,
+    "tags": [
+      "เสื้อเชิ้ตลินิน",
+      "ผ้าลินิน",
+      "โทนเรียบ",
+      "แฟชั่นมือสอง",
+      "ลำลองฤดูร้อน"
     ],
-    "sortOrder": 2
+    "images": [
+      {
+        "url": "https://images.unsplash.com/photo-1713881842156-3d9ef36418cc?auto=format&fit=crop&w=1200&q=80",
+        "alt": "เสื้อเชิ้ตสีฟ้าแขวนตากบนราว",
+        "credit": {
+          "name": "tian dayong",
+          "url": "https://unsplash.com/@tonnnyj"
+        }
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1740711152088-88a009e877bb?auto=format&fit=crop&w=1200&q=80",
+        "alt": "เสื้อเชิ้ตผ้าลินินสีกรมท่าแขวนบนไม้แขวนหน้าพื้นหลังสีขาว",
+        "credit": {
+          "name": "Robert Richman",
+          "url": "https://unsplash.com/@linenese_lifestyle"
+        }
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1713881587420-113c1c43e28a?auto=format&fit=crop&w=1200&q=80",
+        "alt": "เสื้อผ้าลินินสีครีมคอจีนแขวนบนกิ่งไม้ พื้นหลังเรียบโทนทราย",
+        "credit": {
+          "name": "tian dayong",
+          "url": "https://unsplash.com/@tonnnyj"
+        }
+      }
+    ]
+  },
+  {
+    "code": "A003",
+    "title": "กล้องฟิล์มวินเทจ ตัวเครื่องโลหะ",
+    "description": "กล้องฟิล์มวินเทจตัวเครื่องแน่น ถือแล้วรู้สึกถึงน้ำหนักของงานช่างสมัยก่อน เหมาะกับคนอยากเริ่มถ่ายฟิล์มหรือเก็บไว้เป็นของสะสม ยังไม่ได้ทดสอบกับฟิล์มจริง จึงควรถือเป็นชิ้นสำหรับสะสมหรือทดลองเบื้องต้น",
+    "flaws": "ตัวเลขบนวงแหวนปรับซีดบางส่วน ยังไม่ได้ทดสอบกับฟิล์มจริง มีรอยขีดข่วนที่ฝาครอบเลนส์",
+    "condition": "fair",
+    "category": "tech",
+    "price": 1450,
+    "tags": [
+      "กล้องฟิล์ม",
+      "กล้องวินเทจ",
+      "ถ่ายภาพฟิล์ม",
+      "ของสะสม",
+      "กล้องโบราณ"
+    ],
+    "images": [
+      {
+        "url": "https://images.unsplash.com/photo-1495121553079-4c61bcce1894?auto=format&fit=crop&w=1200&q=80",
+        "alt": "กล้องฟิล์มวินเทจสีดำและเงิน",
+        "credit": {
+          "name": "Alexander Andrews",
+          "url": "https://unsplash.com/@alex_andrews"
+        }
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1551264950-49fb963d1493?auto=format&fit=crop&w=1200&q=80",
+        "alt": "กล้องฟิล์มสีดำเทา",
+        "credit": {
+          "name": "Olena Bohovyk",
+          "url": "https://unsplash.com/@olenkasergienko"
+        }
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1512390225428-a9d51c817f94?auto=format&fit=crop&w=1200&q=80",
+        "alt": "กล้องวินเทจสีดำทรงคลาสสิก",
+        "credit": {
+          "name": "Bart van Dijk",
+          "url": "https://unsplash.com/@bart_van_dijk"
+        }
+      }
+    ]
+  },
+  {
+    "code": "A004",
+    "title": "หนังสือภาพถ่ายสถาปัตยกรรมปกแข็ง",
+    "description": "หนังสือภาพถ่ายสถาปัตยกรรมปกแข็งที่รวบรวมภาพอาคารและเส้นสายของพื้นที่ว่าง อ่านเพลิน ๆ ได้ทั้งเล่ม เหมาะกับคนที่ชอบสถาปัตยกรรมหรือต้องการแรงบันดาลใจด้านการออกแบบ",
+    "flaws": "มุมปกกระแทก หน้าแรกมีลายเซ็นปากกาของเจ้าของเดิม",
+    "condition": "good",
+    "category": "books",
+    "price": 320,
+    "tags": [
+      "หนังสือภาพถ่าย",
+      "สถาปัตยกรรม",
+      "หนังสือปกแข็ง",
+      "หนังสือมือสอง",
+      "งานออกแบบ"
+    ],
+    "images": [
+      {
+        "url": "https://images.unsplash.com/photo-1790020286718-c41add23a2e1?auto=format&fit=crop&w=1200&q=80",
+        "alt": "หนังสือสถาปัตยกรรมและงานออกแบบหลายเล่มวางซ้อนกัน",
+        "credit": {
+          "name": "Denis",
+          "url": "https://unsplash.com/@denis96"
+        }
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1543278418-7028dd55b221?auto=format&fit=crop&w=1200&q=80",
+        "alt": "กองหนังสือหลายเล่มวางซ้อนบนพื้นผิวสีน้ำตาล",
+        "credit": {
+          "name": "Studio Media",
+          "url": "https://unsplash.com/@studiomediainc"
+        }
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1681703716891-d06b52393778?auto=format&fit=crop&w=1200&q=80",
+        "alt": "หนังสือภาพสถาปัตยกรรมปกแข็งเล่มหนาเปิดหน้าภาพบ้านและทิวทัศน์ วางบนผ้าสีขาว",
+        "credit": {
+          "name": "Fujiphilm",
+          "url": "https://unsplash.com/@fujiphilm"
+        }
+      }
+    ]
+  },
+  {
+    "code": "A005",
+    "title": "โคมไฟตั้งโต๊ะทองเหลือง",
+    "description": "โคมไฟตั้งโต๊ะทองเหลืองทรงเรียบ เนื้อโลหะให้โทนอุ่นเมื่อเปิดไฟ ผิวทองเหลืองหมองตามอายุ ซึ่งช่วยให้ดูมีเสน่ห์และเข้ากับมุมทำงานหรือมุมอ่านหนังสือ",
+    "flaws": "ทองเหลืองหมองตามอายุ ไม่มีหลอดไฟมาให้ สายไฟเดิมของโคม",
+    "condition": "good",
+    "category": "home",
+    "price": 780,
+    "tags": [
+      "โคมไฟตั้งโต๊ะ",
+      "โคมทองเหลือง",
+      "ของตกแต่งบ้าน",
+      "แสงอุ่น",
+      "มุมทำงาน"
+    ],
+    "images": [
+      {
+        "url": "https://images.unsplash.com/photo-1775811035108-658b4b101cdb?auto=format&fit=crop&w=1200&q=80",
+        "alt": "โคมไฟตั้งโต๊ะทองเหลืองแขนปรับได้",
+        "credit": {
+          "name": "Declan Sun",
+          "url": "https://unsplash.com/@declansun"
+        }
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1773916398209-84b1a5d95763?auto=format&fit=crop&w=1200&q=80",
+        "alt": "โคมไฟตั้งโต๊ะทองเหลืองวินเทจส่องสว่างในมุมอ่านหนังสือ",
+        "credit": {
+          "name": "Oleksii Rozanov",
+          "url": "https://unsplash.com/@rozanovz"
+        }
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1740204245792-374791da9bf0?auto=format&fit=crop&w=1200&q=80",
+        "alt": "โคมไฟตั้งโต๊ะทองเหลืองส่องแสงอุ่นบนโต๊ะไม้ ข้างผนังเรียบ",
+        "credit": {
+          "name": "Kouji Tsuru",
+          "url": "https://unsplash.com/@pafuxu"
+        }
+      }
+    ]
+  },
+  {
+    "code": "A006",
+    "title": "เครื่องเล่นแผ่นเสียงพกพา",
+    "description": "เครื่องเล่นแผ่นเสียงพกพาที่มีลำโพงในตัว เหมาะกับการฟังเพลงในห้องหรือพาไปนั่งเล่นนอกบ้าน เข็มเดิมควรได้รับการเปลี่ยนก่อนใช้งานเพื่อให้เสียงชัดและปลอดภัยต่อแผ่น",
+    "flaws": "เข็มเก่า ควรเปลี่ยน มีรอยถลอกที่ฝาปิด ลำโพงมีเสียงซ่าเบาๆ ที่ความดังสูง",
+    "condition": "fair",
+    "category": "tech",
+    "price": 2200,
+    "tags": [
+      "เครื่องเล่นแผ่นเสียง",
+      "แผ่นเสียง",
+      "ลำโพงพกพา",
+      "ของวินเทจ",
+      "เพลง"
+    ],
+    "images": [
+      {
+        "url": "https://images.unsplash.com/photo-1526394931762-90052e97b376?auto=format&fit=crop&w=1200&q=80",
+        "alt": "เครื่องเล่นแผ่นเสียงสีดำบนโต๊ะไม้สีน้ำตาล",
+        "credit": {
+          "name": "Kevin McCutcheon",
+          "url": "https://unsplash.com/@kevinmccutcheon"
+        }
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1603850121303-d4ade9e5ba65?auto=format&fit=crop&w=1200&q=80",
+        "alt": "เครื่องเล่นแผ่นเสียงสีดำและน้ำตาล",
+        "credit": {
+          "name": "Joe Vasquez",
+          "url": "https://unsplash.com/@josephvas1"
+        }
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1601148071764-8c3f50e9ab20?auto=format&fit=crop&w=1200&q=80",
+        "alt": "เครื่องเล่นแผ่นเสียงวางบนโต๊ะในโทนอบอุ่น",
+        "credit": {
+          "name": "Dorien Monnens",
+          "url": "https://unsplash.com/@dorienmonnens"
+        }
+      }
+    ]
+  },
+  {
+    "code": "A007",
+    "title": "เก้าอี้ไม้โอ๊กทรงเรียบ",
+    "description": "เก้าอี้ไม้โอ๊กทรงเรียบตามแนวมินิมอล เนื้อไม้แข็งแรงและมีลายไม้ชัดเจน เหมาะวางในมุมอ่านหนังสือหรือโต๊ะทำงานที่ต้องการความเรียบง่าย",
+    "flaws": "ที่นั่งมีรอยขีดข่วน ขาข้างหนึ่งมีรอยซ่อมด้วยกาว",
+    "condition": "fair",
+    "category": "home",
+    "price": 1200,
+    "tags": [
+      "เก้าอี้ไม้",
+      "ไม้โอ๊ก",
+      "เฟอร์นิเจอร์มินิมอล",
+      "เก้าอี้มือสอง",
+      "ของตกแต่งบ้าน"
+    ],
+    "images": [
+      {
+        "url": "https://images.unsplash.com/photo-1650476524564-f94dc9669067?auto=format&fit=crop&w=1200&q=80",
+        "alt": "เก้าอี้ไม้วางบนพื้นไม้",
+        "credit": {
+          "name": "insung yoon",
+          "url": "https://unsplash.com/@insungpandora"
+        }
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1699588772787-1eed3b726e0a?auto=format&fit=crop&w=1200&q=80",
+        "alt": "เก้าอี้ไม้บนพื้นหลังสีขาว",
+        "credit": {
+          "name": "Hongly Oung",
+          "url": "https://unsplash.com/@hongly_9"
+        }
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1622880355742-af182a61b362?auto=format&fit=crop&w=1200&q=80",
+        "alt": "เก้าอี้ไม้สีน้ำตาลข้างผนังสีขาว",
+        "credit": {
+          "name": "Ronnarit Jirathanyakorn",
+          "url": "https://unsplash.com/@studioplayground"
+        }
+      }
+    ]
+  },
+  {
+    "code": "A008",
+    "title": "กระเป๋าหนังสะพายข้างสีน้ำตาล",
+    "description": "กระเป๋าหนังสะพายข้างสีน้ำตาลขนาดกำลังดี ใส่ของประจำวันได้สบาย หนังเริ่มนุ่มขึ้นตามการใช้งาน ทำให้มีเอกลักษณ์เฉพาะตัวมากกว่าชิ้นใหม่",
+    "flaws": "หนังด้านมีรอยครีบตามการใช้ สายสะพายมีร่องรอยปรับระดับ ซิปลื่นดี",
+    "condition": "good",
+    "category": "fashion",
+    "price": 950,
+    "tags": [
+      "กระเป๋าหนัง",
+      "กระเป๋าสะพายข้าง",
+      "หนังแท้",
+      "กระเป๋ามือสอง",
+      "สีน้ำตาล"
+    ],
+    "images": [
+      {
+        "url": "https://images.unsplash.com/photo-1473188588951-666fce8e7c68?auto=format&fit=crop&w=1200&q=80",
+        "alt": "กระเป๋าหนังสะพายสีน้ำตาลวางบนพื้นปูนข้างต้นไม้",
+        "credit": {
+          "name": "Álvaro Serrano",
+          "url": "https://unsplash.com/@alvaroserrano"
+        }
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1517612228538-cefdbc2c01e7?auto=format&fit=crop&w=1200&q=80",
+        "alt": "ภาพใกล้ของกระเป๋าหนังสะพายข้างสีน้ำตาลพร้อมหัวเข็มขัด",
+        "credit": {
+          "name": "Quilia",
+          "url": "https://unsplash.com/@heyquilia"
+        }
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1657603738389-951c374b740c?auto=format&fit=crop&w=1200&q=80",
+        "alt": "กระเป๋าหนังสีน้ำตาลใบเล็ก",
+        "credit": {
+          "name": "Fauzan Fathullah",
+          "url": "https://unsplash.com/@fzfte"
+        }
+      }
+    ]
+  },
+  {
+    "code": "A009",
+    "title": "นาฬิกาข้อมือไขลานหน้าปัดเรียบ",
+    "description": "นาฬิกาข้อมือไขลานหน้าปัดเรียบ เดินด้วยกลไกแบบดั้งเดิมที่ต้องไขลานทุกวัน เหมาะกับคนที่สนใจงานกลไกและชอบดูแลของเก่าอย่างใส่ใจ",
+    "flaws": "กระจกมีรอยขนแมว เดินช้ากว่าปกติราว 2 นาทีต่อวัน สายหนังเป็นรอยพับ",
+    "condition": "fair",
+    "category": "fashion",
+    "price": 1600,
+    "tags": [
+      "นาฬิกาไขลาน",
+      "นาฬิกาวินเทจ",
+      "นาฬิกาข้อมือ",
+      "กลไกดั้งเดิม",
+      "ของสะสม"
+    ],
+    "images": [
+      {
+        "url": "https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=1200&q=80",
+        "alt": "นาฬิกาข้อมือหน้าปัดเงินสายหนังสีน้ำตาลวางบนกระจก",
+        "credit": {
+          "name": "Pat Taylor",
+          "url": "https://unsplash.com/@ptaylor_"
+        }
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1613069517653-edc3fca035d8?auto=format&fit=crop&w=1200&q=80",
+        "alt": "นาฬิกาข้อมือหน้าปัดกลมสีเงินสายหนังสีดำ",
+        "credit": {
+          "name": "Alex Boscarato",
+          "url": "https://unsplash.com/@boscheddu"
+        }
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1612817159623-0399784fd0ce?auto=format&fit=crop&w=1200&q=80",
+        "alt": "นาฬิกาข้อมือหน้าปัดกลมสีเงินสายหนังสีน้ำตาล",
+        "credit": {
+          "name": "Paul Cuoco",
+          "url": "https://unsplash.com/@notafraid"
+        }
+      }
+    ]
+  },
+  {
+    "code": "A010",
+    "title": "ชุดแก้วเซรามิกเคลือบด้าน 4 ใบ",
+    "description": "ชุดแก้วเซรามิกเคลือบผิวด้านสี่ใบ สัมผัสนุ่มมือและจับถนัด เหมาะสำหรับดื่มกาแฟหรือชาในทุกวัน และเข้ากับโต๊ะอาหารแบบเรียบง่าย",
+    "flaws": "ใบหนึ่งมีรอยบิ่นเล็กที่ขอบล่าง",
+    "condition": "like_new",
+    "category": "home",
+    "price": 450,
+    "tags": [
+      "แก้วเซรามิก",
+      "แก้วกาแฟ",
+      "เคลือบด้าน",
+      "ชุดถ้วยชา",
+      "ของใช้บนโต๊ะอาหาร"
+    ],
+    "images": [
+      {
+        "url": "https://images.unsplash.com/photo-1536936812504-0e77dc3f0b40?auto=format&fit=crop&w=1200&q=80",
+        "alt": "แก้วเซรามิกสีขาวสองใบบนชั้นในครัวโทนเทา",
+        "credit": {
+          "name": "Katja Vogt",
+          "url": "https://unsplash.com/@folkmade"
+        }
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1675487296580-309b28300a16?auto=format&fit=crop&w=1200&q=80",
+        "alt": "มัคเซรามิกเคลือบด้านสีเทาอมเบจบนโต๊ะกลมสีเทา มีแสงแดดนุ่มพาดผนัง",
+        "credit": {
+          "name": "mk. s",
+          "url": "https://unsplash.com/@mk__s"
+        }
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1687158179173-b9f3eac1fde9?auto=format&fit=crop&w=1200&q=80",
+        "alt": "มัคเซรามิกสีครีมสองใบวางคู่กันบนพื้นผิวเรียบ ไม่มีลวดลาย",
+        "credit": {
+          "name": "sareh Askarzadeh",
+          "url": "https://unsplash.com/@sareh102"
+        }
+      }
+    ]
+  },
+  {
+    "code": "A011",
+    "title": "นิยายแปลปกแข็ง ชุด 3 เล่ม",
+    "description": "นิยายแปลปกแข็งสามเล่มในชุดเดียวกัน เหมาะกับการอ่านต่อเนื่องหรือเก็บไว้ในชั้นหนังสือ กลิ่นกระดาษเก่าและสีของหน้ากระดาษให้บรรยากาศของหนังสือที่ผ่านมือคนอ่านมาแล้ว",
+    "flaws": "สันปกซีด มีกลิ่นกระดาษเก่า หน้ากระดาษด้านในเหลืองเล็กน้อย",
+    "condition": "good",
+    "category": "books",
+    "price": 390,
+    "tags": [
+      "นิยายแปล",
+      "หนังสือปกแข็ง",
+      "ชุดหนังสือ",
+      "หนังสือมือสอง",
+      "นิยาย"
+    ],
+    "images": [
+      {
+        "url": "https://images.unsplash.com/photo-1455885661740-29cbf08a42fa?auto=format&fit=crop&w=1200&q=80",
+        "alt": "หนังสือสี่เล่มวางบนพื้นผิวสีน้ำตาล",
+        "credit": {
+          "name": "Annie Spratt",
+          "url": "https://unsplash.com/@anniespratt"
+        }
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1499332251574-a76a01d733fc?auto=format&fit=crop&w=1200&q=80",
+        "alt": "กองหนังสือเก่าสีน้ำตาลหลายเล่ม",
+        "credit": {
+          "name": "Annie Spratt",
+          "url": "https://unsplash.com/@anniespratt"
+        }
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1590412701565-55de7fad7cab?auto=format&fit=crop&w=1200&q=80",
+        "alt": "หนังสือปกแข็งสีดำและทองหกเล่มบนชั้น",
+        "credit": {
+          "name": "Elena Kloppenburg",
+          "url": "https://unsplash.com/@elli19"
+        }
+      }
+    ]
+  },
+  {
+    "code": "A012",
+    "title": "วิทยุทรานซิสเตอร์ตัวเล็ก",
+    "description": "วิทยุทรานซิสเตอร์ตัวเล็กที่พกง่ายและวางได้บนโต๊ะหรือชั้นหนังสือ คลื่น AM รับได้ชัดเจน เหมาะกับการฟังข่าวหรือรายการเพลงแบบเรียบ ๆ",
+    "flaws": "รับคลื่น AM ชัด แต่ FM มีสัญญาณรบกวน ฝาครอบถ่านหลวมเล็กน้อย",
+    "condition": "fair",
+    "category": "tech",
+    "price": 1100,
+    "tags": [
+      "วิทยุทรานซิสเตอร์",
+      "วิทยุวินเทจ",
+      "วิทยุ AM",
+      "ของตกแต่งบ้าน",
+      "เครื่องเสียงมือสอง"
+    ],
+    "images": [
+      {
+        "url": "https://images.unsplash.com/photo-1722141953853-8e3a378e2e7c?auto=format&fit=crop&w=1200&q=80",
+        "alt": "วิทยุสไตล์วินเทจวางบนโต๊ะไม้",
+        "credit": {
+          "name": "Indra Projects",
+          "url": "https://unsplash.com/@indraprojects"
+        }
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1749649773867-9c9787a47df9?auto=format&fit=crop&w=1200&q=80",
+        "alt": "วิทยุวินเทจบนพื้นหลังสีขาว",
+        "credit": {
+          "name": "Ian Talmacs",
+          "url": "https://unsplash.com/@iantalmacs"
+        }
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1770736906697-49bcb455b9bc?auto=format&fit=crop&w=1200&q=80",
+        "alt": "วิทยุวินเทจพื้นหลังไม้ มีปุ่มปรับเสียง",
+        "credit": {
+          "name": "Evan Marvell",
+          "url": "https://unsplash.com/@evan_marvell"
+        }
+      }
+    ]
   }
 ]
