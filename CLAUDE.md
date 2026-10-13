@@ -12,7 +12,7 @@
 | Writer | `shop-writer` | Haiku · low | ข้อมูลสินค้า คอนเทนต์ TikTok |
 
 ## วิธีเรียก agent (สำคัญ — อ่านก่อนสั่งงานทุกครั้ง)
-session นี้เรียก `shop-builder` / `shop-reviewer` / `shop-writer` ด้วยชื่อตรงๆ ไม่ได้ (ไฟล์ถูกสร้างหลัง session เริ่ม ผู้ใช้ตกลงไม่รีสตาร์ต) **ให้เรียกแบบนี้เสมอ:**
+ตอนนี้ session เรียก `shop-builder` / `shop-reviewer` / `shop-writer` ด้วยชื่อตรงๆ ได้แล้ว (`subagent_type` = ชื่อนั้น, Reviewer ถูกจำกัดเครื่องมือเป็นอ่านอย่างเดียวจริง) **ให้เรียกชื่อตรงๆ ก่อน** ถ้าระบบหาไม่เจอ (session เก่าที่เริ่มก่อนสร้างไฟล์) ให้ถอยไปวิธีสำรองนี้:
 - `subagent_type: "general-purpose"` + ตั้ง `model` และ `effort` ตามตารางทีม (override ตามกฎ effort ด้านล่าง)
 - ขึ้นต้น prompt ให้ agent **อ่านไฟล์บทบาทก่อนเริ่ม** แล้วทำตามทุกข้อ: `D:\showcase-project\.claude\agents\shop-builder.md` (หรือ `shop-reviewer.md` / `shop-writer.md`, ข้ามส่วน frontmatter) + `CLAUDE.md` + `SPEC.md` + `AGENTS.md` และเอกสาร Next.js 16 ใน `node_modules/next/dist/docs/` เมื่อแตะโค้ด Next
 - ไฟล์บทบาทเป็นแหล่งความจริงของกฎ ห้ามย่อ/ถอดความ แค่สั่งให้อ่าน
@@ -48,6 +48,7 @@ session นี้เรียก `shop-builder` / `shop-reviewer` / `shop-writer
 - **ข้อความบนเว็บต้องไม่อ้างสิ่งที่ยังไม่ได้ทำ/ยังไม่ได้พิสูจน์** (เช่น "รีเซ็ตทุกวัน", "เก็บแบบ private")
 - **ห้ามฆ่า process ตามชื่อ** (agent เคยปิด Node ทั้งเครื่อง) — ใช้ PID ของตัวเอง
 - **ใช้เบราว์เซอร์/พรีวิวเสร็จแล้วปิดทันที** (ผู้ใช้สั่ง): หยุดเซิร์ฟเวอร์ด้วย `preview_stop` **และปิดทุกแท็บที่ตัวเองเปิดด้วย `tabs_close`** ทุกครั้งที่ตรวจเสร็จ (ไม่ปล่อยค้างข้ามขั้นตอน) ถ้าต้องใช้อีกค่อยเปิดใหม่ — ใส่ข้อนี้ใน prompt ของ agent ที่ใช้เบราว์เซอร์ด้วย และก่อนจบงานทุกครั้งให้ตรวจ `preview_list` ว่าไม่เหลืออะไรค้าง
+- **ห้ามสั่งที่อ่าน stdin ค้างรอ** (เช่น `python -` ใน heredoc ที่ไม่มีข้อมูลเข้า — เคยค้าง 2.5 ชม.) ให้เขียนสคริปต์ลงไฟล์ด้วย Write/Edit แล้วค่อยรัน, คำสั่งที่อาจนาน (build, test, server) ต้องตั้ง `timeout` และก่อนจบงานต้องไม่มี process ที่ตัวเองเปิดค้างอยู่
 - **Windows/shell:** connection string มี `&` ใช้ `source .env` ไม่ได้ ให้โหลดผ่าน `node --env-file=.env.local`
 
 ## สถานะ (อัปเดตเมื่อจบแต่ละขั้น)
