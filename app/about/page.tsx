@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { splitInlineCode, type BuildLogBullet, type BuildLogEntry } from "@/lib/build-log";
 import { getBuildLog } from "@/lib/build-log-file";
+import { isDemoMode } from "@/lib/demo";
 
 export const metadata: Metadata = {
   title: "เกี่ยวกับโปรเจกต์",
@@ -130,6 +131,8 @@ function LogEntry({ entry }: { entry: BuildLogEntry }) {
 
 export default async function AboutPage() {
   const log = await getBuildLog();
+  // ข้อความ "ลองหลังบ้านได้" ต้องตรงกับค่า DEMO_MODE จริง (ปิดโหมดเดโม = ไม่มีปุ่มเดโมให้ลอง)
+  const demo = isDemoMode();
 
   return (
     <main className="mx-auto max-w-4xl px-4 pt-10 pb-16 md:px-8 md:pt-16">
@@ -142,7 +145,11 @@ export default async function AboutPage() {
       <p className="mt-6 max-w-2xl leading-8 text-muted">
         Second Room เป็นร้านขายของมือสองแบบ <strong className="text-ink">เดโม</strong> ทำขึ้นเป็นผลงาน
         ให้เห็นว่างาน e-commerce ครบวงจรทำได้จริง ตั้งแต่หน้าร้านที่ออกแบบสำหรับมือถือ
-        การจองสินค้าชิ้นเดียวโดยไม่ขายซ้ำ ไปจนถึงการแนบสลิป ส่วนหลังบ้านสำหรับตรวจสอบออเดอร์ยังอยู่ระหว่างพัฒนา
+        การจองสินค้าชิ้นเดียวโดยไม่ขายซ้ำ ไปจนถึงการแนบสลิป
+        {demo
+          ? " หลังบ้านสำหรับตรวจสลิปและจัดการออเดอร์ลองได้แบบเดโมที่หน้าเข้าสู่ระบบหลังบ้าน"
+          : " และหลังบ้านสำหรับให้เจ้าของร้านตรวจสลิปและจัดการออเดอร์ (ตอนนี้ไม่เปิดให้ลองแบบเดโม)"}{" "}
+        ส่วนจัดการสินค้ายังอยู่ระหว่างพัฒนา
       </p>
 
       <section aria-labelledby="why-demo" className="mt-14 border-t border-rule pt-8">
@@ -156,7 +163,7 @@ export default async function AboutPage() {
           </p>
           <p>
             เหตุผลหลักคือเว็บถูกวางไว้บน Vercel แผน Hobby ซึ่งอนุญาตเฉพาะการใช้งานที่ไม่ใช่เชิงพาณิชย์
-            การรับเงินจริงจะทำให้ขัดเงื่อนไขนั้น จึงออกแบบให้เป็นร้านจำลองที่ลองได้ตั้งแต่เลือกสินค้า จอง จนถึงแนบสลิป (หลังบ้านยังไม่เปิดใช้)
+            การรับเงินจริงจะทำให้ขัดเงื่อนไขนั้น จึงออกแบบให้เป็นร้านจำลองที่ลองได้ตั้งแต่เลือกสินค้า จอง จนถึงแนบสลิป{demo ? " และลองฝั่งหลังบ้านแบบเดโมได้" : ""}
             แต่ไม่มีเงินจริงไหลผ่าน
           </p>
         </div>

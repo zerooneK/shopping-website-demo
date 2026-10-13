@@ -5,7 +5,11 @@ import { defineConfig } from "vitest/config";
 // รันด้วย `npm run test:integration` (โหลด .env.local ผ่าน node --env-file)
 export default defineConfig({
   resolve: {
-    alias: { "@": fileURLToPath(new URL("./", import.meta.url)) },
+    alias: {
+      "@": fileURLToPath(new URL("./", import.meta.url)),
+      // server-only ไม่มีแพ็กเกจจริงใน node_modules (Next resolve ให้ตอน bundle) — ใช้ stub ว่างตอนเทสต์
+      "server-only": fileURLToPath(new URL("./tests/stubs/server-only.ts", import.meta.url)),
+    },
   },
   test: {
     environment: "node",

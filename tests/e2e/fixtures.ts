@@ -27,9 +27,20 @@ export const E2E_CODES = {
   ip2: "T989",
   ip3: "T990",
   ip4: "T991",
+  /** หลังบ้าน (admin.spec.ts) — รหัส V001-V005 ไม่ชนกับ integration test (T901-T999, U801-U860) */
+  adminConfirm: "V001",
+  adminReject: "V002",
+  adminShip: "V003",
+  demoOwn: "V004",
+  demoOther: "V005",
+  /** demo ปฏิเสธออเดอร์ของตัวเอง (ตรวจป้ายข้อความจากผู้ลองเดโมฝั่งลูกค้า) */
+  demoOwnReject: "V006",
 } as const;
 
-const ALL_CODES = Array.from({ length: 11 }, (_, i) => `T${981 + i}`);
+const ALL_CODES = [
+  ...Array.from({ length: 11 }, (_, i) => `T${981 + i}`),
+  ...Array.from({ length: 6 }, (_, i) => `V${String(i + 1).padStart(3, "0")}`),
+];
 
 function sampleImages(): ItemImage[] {
   // ใช้รูปของ seed เป็นข้อมูลตัวอย่าง (อ่านจากไฟล์ ไม่แตะ DB ของ seed)
@@ -95,6 +106,12 @@ export async function createFixtures() {
       { ...base, code: E2E_CODES.ip2, title: "ของทดสอบ e2e IP 2", price: 100, sortOrder: -2 },
       { ...base, code: E2E_CODES.ip3, title: "ของทดสอบ e2e IP 3", price: 100, sortOrder: -2 },
       { ...base, code: E2E_CODES.ip4, title: "ของทดสอบ e2e IP 4", price: 100, sortOrder: -2 },
+      { ...base, code: E2E_CODES.adminConfirm, title: "ของทดสอบ e2e หลังบ้าน ยืนยัน", price: 410, sortOrder: 90 },
+      { ...base, code: E2E_CODES.adminReject, title: "ของทดสอบ e2e หลังบ้าน ปฏิเสธ", price: 420, sortOrder: 91 },
+      { ...base, code: E2E_CODES.adminShip, title: "ของทดสอบ e2e หลังบ้าน จัดส่ง", price: 430, sortOrder: 92 },
+      { ...base, code: E2E_CODES.demoOwn, title: "ของทดสอบ e2e เดโม ของตัวเอง", price: 440, sortOrder: 93 },
+      { ...base, code: E2E_CODES.demoOther, title: "ของทดสอบ e2e เดโม ของคนอื่น", price: 450, sortOrder: 94 },
+      { ...base, code: E2E_CODES.demoOwnReject, title: "ของทดสอบ e2e เดโม ปฏิเสธเอง", price: 460, sortOrder: 95 },
     ]);
 }
 

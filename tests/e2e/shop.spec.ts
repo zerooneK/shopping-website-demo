@@ -310,7 +310,7 @@ test.describe("API (ผ่าน request context ที่มี cookie jar ข�
 });
 
 test.describe("ถ้อยคำสอดคล้องกับสิ่งที่ระบบทำจริง", () => {
-  test("/about และ /privacy ไม่อ้างการรีเซ็ตรายวันหรือหลังบ้านที่ยังไม่มี", async ({ page }) => {
+  test("/about และ /privacy ไม่อ้างการรีเซ็ตรายวัน และบอกสถานะหลังบ้านตรงความจริง", async ({ page }) => {
     await page.goto("/about");
     // เฉพาะส่วนคำอธิบาย (ไม่รวมไทม์ไลน์ที่ดึงจาก BUILD_LOG ซึ่งอาจเอ่ยถึงถ้อยคำเหล่านี้ตอนบันทึกการแก้)
     const about =
@@ -325,5 +325,16 @@ test.describe("ถ้อยคำสอดคล้องกับสิ่ง�
     const privacy = await page.locator("main").innerText();
     expect(privacy).not.toContain("รีเซ็ตทุกวัน");
     expect(privacy).toContain("ยังไม่มีระบบล้างอัตโนมัติ");
+    // หลังบ้านเปิดแล้ว (ขั้น 3c-1): ข้อความต้องไม่บอกว่า "ยังไม่มีหลังบ้าน" และต้องบอกพฤติกรรมของ role เดโมที่ทำจริง
+    expect(privacy).not.toContain("ยังไม่มีหลังบ้านเปิดใช้งาน");
+    expect(privacy).toContain("เปิดดูสลิปได้เฉพาะออเดอร์ที่สร้างจากเบราว์เซอร์ของตัวเอง");
+    expect(about).not.toContain("หลังบ้านยังไม่เปิดใช้");
+    // L2: ใช้คำว่า "ปิดบังบางส่วน" และบอกว่า demo เปลี่ยนสถานะ/เขียนเหตุผลได้เฉพาะออเดอร์ของตัวเอง; ไม่อ้างรีเซ็ตรายวัน
+    expect(privacy).toContain("ปิดบังบางส่วน");
+    expect(privacy).toContain("เปลี่ยนสถานะออเดอร์");
+    expect(privacy).toContain("เฉพาะออเดอร์ที่ตัวเองสร้างจากเบราว์เซอร์นั้น");
+    expect(privacy).toContain("(ข้อความจากผู้ลองเดโม)");
+    // DEMO_MODE=true ใน e2e → ประโยค "ลองหลังบ้านได้" ต้องแสดง (ผูกกับ isDemoMode())
+    expect(about).toContain("ลองได้แบบเดโม");
   });
 });

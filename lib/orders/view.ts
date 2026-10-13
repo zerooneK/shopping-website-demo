@@ -147,6 +147,11 @@ const LABEL: Record<string, string> = {
 /** event ภายในระบบ (ไม่ใช่ความคืบหน้าของออเดอร์) — ไม่แสดงให้ลูกค้า; หลังบ้าน 3c ควรกรองด้วยเช่นกัน */
 const INTERNAL_EVENT_TYPES = new Set(["slip_token_issued"]);
 
+/** ใช้ร่วมกับหลังบ้าน (lib/admin/view.ts) เพื่อให้กรอง event ภายในด้วยนิยามเดียวกัน */
+export function isInternalEventType(type: string): boolean {
+  return INTERNAL_EVENT_TYPES.has(type);
+}
+
 function str(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }

@@ -17,7 +17,12 @@ const PORT = 3100;
  * จึงสร้างค่าสุ่มต่อการรันที่นี่: ไม่ hardcode, ไม่เขียนลงดิสก์ และไม่อ่าน/แสดงค่าใน .env.local
  * (env ที่ส่งให้ webServer ทับค่าจาก --env-file เสมอ)
  */
-const E2E_SESSION_SECRET = randomBytes(32).toString("hex");
+// ใช้ ??= เพราะ worker ของ Playwright โหลดไฟล์นี้ซ้ำ — ต้องได้ค่าเดียวกับ process หลัก (สืบทอดผ่าน env)
+process.env.E2E_SESSION_SECRET ??= randomBytes(32).toString("hex");
+/** รหัสเจ้าของร้านสำหรับ e2e เท่านั้น: สุ่มต่อการรัน ไม่เขียนลงดิสก์ ไม่ใช้ ADMIN_PASSWORD จริงใน .env.local */
+process.env.E2E_ADMIN_PASSWORD ??= randomBytes(18).toString("base64url");
+const E2E_SESSION_SECRET = process.env.E2E_SESSION_SECRET;
+const E2E_ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD;
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -49,6 +54,11 @@ export default defineConfig({
     reuseExistingServer: false,
     stdout: "ignore",
     stderr: "pipe",
-    env: { PORT: String(PORT), SESSION_SECRET: E2E_SESSION_SECRET },
+    env: {
+      PORT: String(PORT),
+      SESSION_SECRET: E2E_SESSION_SECRET,
+      ADMIN_PASSWORD: E2E_ADMIN_PASSWORD,
+      DEMO_MODE: "true",
+    },
   },
 });

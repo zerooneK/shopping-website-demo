@@ -21,10 +21,18 @@ const nextConfig: NextConfig = {
       { key: "X-Robots-Tag", value: "noindex, nofollow" },
       { key: "X-Content-Type-Options", value: "nosniff" },
     ];
+    // หลังบ้านห้ามถูกฝังใน iframe (clickjacking): CSP frame-ancestors + X-Frame-Options สำหรับ browser เก่า
+    const noFraming = [
+      { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+      { key: "X-Frame-Options", value: "DENY" },
+    ];
     return [
       { source: "/order/:path*", headers: privatePage },
       { source: "/checkout/:path*", headers: privatePage },
       { source: "/api/orders/:path*", headers: privatePage },
+      // หลังบ้าน: ห้าม cache / ห้ามให้ search engine เก็บ
+      { source: "/admin/:path*", headers: [...privatePage, ...noFraming] },
+      { source: "/api/admin/:path*", headers: [...privatePage, ...noFraming] },
     ];
   },
   // หน้า /about อ่าน docs/BUILD_LOG.md ตอน build (fs) — บังคับให้ไฟล์ถูก trace เข้า bundle ของ Vercel

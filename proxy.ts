@@ -1,6 +1,8 @@
 import { and, eq, ne } from "drizzle-orm";
 import { NextResponse, type NextRequest } from "next/server";
 import { getDb } from "./db/client";
+import { getSessionKey, SESSION_COOKIE, verifySession } from "./lib/auth";
+import { isDemoMode } from "./lib/demo";
 import { items, orders } from "./db/schema";
 import { isValidOrderToken } from "./lib/orders/view";
 import { itemCodeSchema } from "./lib/validation";
@@ -42,7 +44,38 @@ async function orderExists(token: string): Promise<boolean> {
   return rows.length > 0;
 }
 
+/**
+ * ด่านแรกของหลังบ้าน (optimistic): ไม่มี session ที่ถูกต้อง → /admin/* ไปหน้า login, /api/admin/* ตอบ 401
+ * นี่เป็นแค่ชั้นแรก — ทุกหน้า/server action/route handler ของหลังบ้านตรวจ session ซ้ำเองฝั่ง server
+ * (lib/auth-server.ts) ห้ามพึ่งไฟล์นี้ชั้นเดียว
+ */
+async function adminGate(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  if (pathname === "/admin/login" || pathname.startsWith("/admin/login/")) {
+    return NextResponse.next();
+  }
+  const session = await verifySession(request.cookies.get(SESSION_COOKIE)?.value, getSessionKey());
+  const valid = session !== null && (session.role !== "demo" || isDemoMode());
+  if (valid) return NextResponse.next();
+
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.json(
+      { error: "unauthorized" },
+      { status: 401, headers: { "Cache-Control": "private, no-store" } },
+    );
+  }
+  const url = request.nextUrl.clone();
+  url.pathname = "/admin/login";
+  url.search = "";
+  return NextResponse.redirect(url);
+}
+
 export async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  if (pathname === "/admin" || pathname.startsWith("/admin/") || pathname.startsWith("/api/admin/")) {
+    return adminGate(request);
+  }
+
   const [, section, rawParam = ""] = request.nextUrl.pathname.split("/");
   let param = rawParam;
   try {
@@ -71,5 +104,12 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/item/:code", "/checkout/:code", "/order/:token"],
+  matcher: [
+    "/item/:code",
+    "/checkout/:code",
+    "/order/:token",
+    "/admin",
+    "/admin/:path*",
+    "/api/admin/:path*",
+  ],
 };
