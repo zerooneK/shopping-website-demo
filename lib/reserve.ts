@@ -3,7 +3,7 @@ import { and, eq, lt, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { items, orderEvents, orders } from "../db/schema";
 import type { NewOrder, Order } from "../db/schema";
-import { holdingOrderExistsSql } from "./availability";
+import { holdingOrderExistsSql, ipHoldingOrderCondition } from "./availability";
 import {
   decideIpRateLimit,
   decideRateLimit,
@@ -61,8 +61,9 @@ export interface ReserveTx {
    * คำสั่งเดียวแบบ compare-and-set:
    * UPDATE items SET status='reserved', reserved_until=now()+'15 min'
    * WHERE code=$code AND (status='available' OR (status='reserved' AND reserved_until < now()
-   *   AND NOT EXISTS (ออเดอร์ที่ยังถือสินค้านี้อยู่: awaiting_review/confirmed/shipped/completed
-   *                   หรือ pending_payment ที่ expires_at >= now())))
+   *   AND NOT EXISTS (ออเดอร์ที่ยังถือสินค้านี้อยู่ — นิยามเดียวใน lib/availability.ts: awaiting_review,
+   *                   pending_payment ที่ expires_at >= now(), confirmed/shipped/completed ที่ไม่ใช่
+   *                   ออเดอร์เดโมที่เลยเวลา DEMO_ORDER_RETURN_MINUTES แล้ว)))
    * RETURNING id, price, reserved_until   — ไม่มีแถวคืน = null
    */
   claimItem(code: string): Promise<ClaimedItem | null>;
@@ -264,15 +265,12 @@ export function createDrizzleReserveStore(db: Db): ReserveStore {
           async countIpOrders(clientIpHash) {
             const res = await trx.execute<{ holding: number; last_hour: number }>(sql`
               SELECT
+                count(*) FILTER (WHERE ${ipHoldingOrderCondition("o")})::int AS holding,
                 count(*) FILTER (
-                  WHERE status = 'awaiting_review'
-                     OR (status = 'pending_payment' AND expires_at >= now())
-                )::int AS holding,
-                count(*) FILTER (
-                  WHERE created_at > now() - interval '1 hour'
+                  WHERE o.created_at > now() - interval '1 hour'
                 )::int AS last_hour
-              FROM orders
-              WHERE client_ip_hash = ${clientIpHash}
+              FROM orders o
+              WHERE o.client_ip_hash = ${clientIpHash}
             `);
             const row = res.rows[0];
             return { holding: row?.holding ?? 0, lastHour: row?.last_hour ?? 0 };

@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { SignJWT } from "jose";
+import { sql } from "drizzle-orm";
+import { getDb } from "../../db/client";
 import { E2E_CODES } from "./fixtures";
 
 /**
@@ -26,6 +28,7 @@ const PRIORITY: Record<string, number> = {
   rejected: 5,
   expired: 5,
   cancelled: 5,
+  demo_ended: 5,
 };
 
 function randomIp() {
@@ -99,6 +102,8 @@ const TITLES: Record<string, string> = {
   [E2E_CODES.demoOwn]: "ของทดสอบ e2e เดโม ของตัวเอง",
   [E2E_CODES.demoOther]: "ของทดสอบ e2e เดโม ของคนอื่น",
   [E2E_CODES.demoOwnReject]: "ของทดสอบ e2e เดโม ปฏิเสธเอง",
+  [E2E_CODES.ownerReturn]: "ของทดสอบ e2e คืนสินค้า",
+  [E2E_CODES.demoEnded]: "ของทดสอบ e2e เดโมสิ้นสุด",
 };
 
 const status = (page: Page) => page.getByTestId("admin-order-status");
@@ -279,7 +284,10 @@ test.describe("หลังบ้าน: owner จัดการออเดอ
     await page.getByRole("button", { name: "ปิดงาน" }).click();
     await expect(status(page)).toHaveAttribute("data-status", "completed");
     await expect(page.getByTestId("action-success")).toHaveText("ปิดงานแล้ว");
-    await expect(page.getByText("ไม่มีการดำเนินการที่ทำได้ในสถานะนี้")).toBeVisible();
+    // เสร็จสิ้นแล้ว: เหลือเฉพาะ "คืนสินค้าเข้าร้าน" ของ owner (ไม่มีปุ่มจัดส่ง/ปิดงาน/ยืนยันอีก)
+    await expect(page.getByTestId("return-form")).toBeVisible();
+    await expect(page.getByRole("button", { name: "ปิดงาน" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "ยืนยันการชำระเงิน" })).toHaveCount(0);
     await page.goto(`/order/${token}`);
     await expect(page.getByTestId("order-headline")).toHaveAttribute("data-status", "completed");
     await customer.dispose();
@@ -460,6 +468,17 @@ test.describe("หลังบ้าน: role เดโม (375x812)", () => {
     await expect(page.locator("#timeline-heading + ol")).toContainText("โดย ผู้ลองเดโม");
     await page.goto(`/order/${ownToken}`);
     await expect(page.getByTestId("order-headline")).toHaveAttribute("data-status", "confirmed");
+    // ออเดอร์ที่ demo ยืนยัน = ทดลอง: หน้าลูกค้าบอกว่าจะคืนสินค้าอัตโนมัติ และสินค้า "ไม่ใช่ SOLD ถาวร" (ถูกกันไว้ชั่วคราว)
+    await expect(page.getByTestId("order-demo-note")).toContainText("ระบบจะคืนสินค้าเข้าร้านให้เองภายใน 20 นาทีหลังยืนยัน");
+    await page.goto(`/item/${E2E_CODES.demoOwn}`);
+    await expect(page.locator("button[disabled]:visible", { hasText: "มีคนจองอยู่" })).toBeVisible();
+    await expect(page.locator("button[disabled]:visible", { hasText: "ขายแล้ว" })).toHaveCount(0);
+    await page.goto(`/admin/orders/${ownId}`);
+    await expect(page.getByTestId("demo-return-note")).toContainText("ระบบจะคืนสินค้าเข้าร้านให้เอง");
+    await expect(page.getByTestId("admin-item-status")).toHaveText("มีคนจองอยู่");
+    // demo ไม่มีปุ่มคืนสินค้า (เป็นของ owner)
+    await expect(page.getByRole("button", { name: "คืนสินค้าเข้าร้าน" })).toHaveCount(0);
+    await expect(page.getByTestId("return-form")).toHaveCount(0);
 
     // ---- demo ปฏิเสธออเดอร์ "ของตัวเอง" ได้ และลูกค้า (หน้า order) เห็นป้ายว่าเป็นข้อความจากผู้ลองเดโม
     await openOrderByItemCode(page, E2E_CODES.demoOwnReject);
@@ -505,5 +524,101 @@ test.describe("หลังบ้าน: role เดโม (375x812)", () => {
       expect(res.status()).not.toBe(307);
       expect(res.status()).not.toBe(200);
     }
+  });
+});
+
+test.describe("หลังบ้าน: คืนสินค้าเข้าร้าน และออเดอร์เดโมที่สิ้นสุดแล้ว (375x812)", () => {
+  test("owner ยืนยันแล้วคืนสินค้าเข้าร้านได้ (ต้องมีเหตุผล): ออเดอร์ cancelled, สินค้ากลับว่างและจองใหม่ได้, ลูกค้าเห็นเหตุผล", async ({
+    page,
+    playwright,
+    baseURL,
+  }) => {
+    const customer = await newCustomer(playwright, baseURL);
+    const token = await placeAwaitingOrder(customer, E2E_CODES.ownerReturn);
+    await loginOwner(page);
+    const orderId = await openOrderByItemCode(page, E2E_CODES.ownerReturn);
+    await page.getByRole("button", { name: "ยืนยันการชำระเงิน" }).click();
+    await expect(status(page)).toHaveAttribute("data-status", "confirmed");
+    await expect(page.getByTestId("admin-item-status")).toHaveText("ขายแล้ว");
+    // ออเดอร์ที่ owner ยืนยัน: ไม่มีหมายเหตุเดโม
+    await expect(page.getByTestId("demo-return-note")).toHaveCount(0);
+    await page.goto(`/item/${E2E_CODES.ownerReturn}`);
+    await expect(page.locator("button[disabled]:visible", { hasText: "ขายแล้ว" })).toBeVisible();
+
+    await page.goto(`/admin/orders/${orderId}`);
+    await expect(page.getByTestId("return-form")).toBeVisible();
+    await expectNoHorizontalScroll(page);
+    await page.screenshot({ path: "test-results/shots/admin-owner-return-375.png", fullPage: true });
+    // เหตุผลว่าง = ฟอร์มไม่ส่ง (required) สถานะไม่เปลี่ยน
+    await page.getByRole("button", { name: "คืนสินค้าเข้าร้าน" }).click();
+    await expect(status(page)).toHaveAttribute("data-status", "confirmed");
+    await page.locator("#return-reason").fill("ลูกค้าขอยกเลิกการซื้อ");
+    await page.getByRole("button", { name: "คืนสินค้าเข้าร้าน" }).click();
+    await expect(status(page)).toHaveAttribute("data-status", "cancelled");
+    await expect(page.getByTestId("action-success")).toHaveText("คืนสินค้าเข้าร้านและยกเลิกออเดอร์แล้ว");
+    await expect(page.getByTestId("admin-item-status")).toHaveText("ว่าง");
+    await expect(page.locator("#timeline-heading + ol")).toContainText("คืนสินค้าเข้าร้าน/ยกเลิกออเดอร์");
+    await expect(page.locator("#timeline-heading + ol")).toContainText("โดย เจ้าของร้าน");
+
+    // ลูกค้าเห็นว่าร้านเป็นผู้ยกเลิกพร้อมเหตุผล; หน้าสินค้ากลับมาจองได้
+    await page.goto(`/order/${token}`);
+    await expect(page.getByTestId("order-headline")).toHaveAttribute("data-status", "cancelled");
+    await expect(page.getByTestId("order-headline")).toContainText("ร้านยกเลิกออเดอร์และคืนสินค้าเข้าร้านแล้ว");
+    await expect(page.getByTestId("order-body")).toHaveText("เหตุผล: ลูกค้าขอยกเลิกการซื้อ");
+    await page.goto(`/item/${E2E_CODES.ownerReturn}`);
+    await expect(page.locator("a:visible", { hasText: "จองชิ้นนี้" })).toBeVisible();
+    await customer.dispose();
+  });
+
+  test("ออเดอร์ที่ demo ยืนยันครบ 20 นาที: สินค้ากลับว่างเอง, หน้าลูกค้า/หลังบ้านแสดง 'เดโมสิ้นสุดแล้ว' ไม่ค้างเป็นยืนยันแล้ว, ย้ายไปแท็บปิดแล้ว", async ({
+    page,
+  }) => {
+    const token = await placeAwaitingOrder(page.request, E2E_CODES.demoEnded);
+    await loginDemo(page);
+    const orderId = await openOrderByItemCode(page, E2E_CODES.demoEnded);
+    await page.getByRole("button", { name: "ยืนยันการชำระเงิน" }).click();
+    await expect(status(page)).toHaveAttribute("data-status", "confirmed");
+    await page.goto(`/item/${E2E_CODES.demoEnded}`);
+    await expect(page.locator("button[disabled]:visible", { hasText: "มีคนจองอยู่" })).toBeVisible();
+
+    // จำลองเวลาผ่านไป 25 นาที (ตรรกะจริงตัดสินด้วย now() ของ DB: ย้อน confirmed_at และ reserved_until ที่ระบบตั้งไว้)
+    const db = getDb();
+    await db.execute(sql`UPDATE orders SET confirmed_at = now() - interval '25 minutes' WHERE id = ${orderId}`);
+    await db.execute(
+      sql`UPDATE items SET reserved_until = (SELECT confirmed_at + interval '20 minutes' FROM orders WHERE id = ${orderId})
+          WHERE id = (SELECT item_id FROM orders WHERE id = ${orderId})`,
+    );
+
+    // หน้าสินค้า: ว่างและจองได้อีกครั้ง
+    await page.goto(`/item/${E2E_CODES.demoEnded}`);
+    await expect(page.locator("a:visible", { hasText: "จองชิ้นนี้" })).toBeVisible();
+
+    // หน้าลูกค้า: เดโมสิ้นสุดแล้ว
+    await page.goto(`/order/${token}`);
+    await expect(page.getByTestId("order-headline")).toHaveAttribute("data-status", "demo_ended");
+    await expect(page.getByTestId("order-headline")).toHaveText("เดโมสิ้นสุดแล้ว");
+    await expect(page.getByTestId("order-body")).toContainText("ไม่ใช่การขายจริง");
+    await expectNoHorizontalScroll(page);
+    await page.screenshot({ path: "test-results/shots/order-demo-ended-375.png", fullPage: true });
+
+    // หลังบ้าน: สถานะ demo_ended, ไม่มีปุ่ม, ไม่อยู่ในแท็บ "ยืนยันแล้ว" แต่อยู่ใน "ปิดแล้ว"
+    await page.goto(`/admin/orders/${orderId}`);
+    await expect(status(page)).toHaveAttribute("data-status", "demo_ended");
+    await expect(status(page)).toContainText("เดโมสิ้นสุดแล้ว");
+    await expect(page.getByTestId("demo-return-note")).toContainText("สิ้นสุดแล้ว");
+    await expect(page.getByRole("button", { name: "ปิดงาน" })).toHaveCount(0);
+    await expect(page.getByText("ไม่มีการดำเนินการที่ทำได้ในสถานะนี้")).toBeVisible();
+    await expect(page.getByTestId("admin-item-status")).toHaveText("ว่าง");
+
+    const title = TITLES[E2E_CODES.demoEnded];
+    await page.goto("/admin?tab=confirmed");
+    await expect(page.locator('[data-testid="admin-order-row"]', { hasText: title })).toHaveCount(0);
+    await page.goto("/admin?tab=closed");
+    const row = page.locator('[data-testid="admin-order-row"]', { hasText: title });
+    await expect(row).toHaveCount(1);
+    await expect(row).toHaveAttribute("data-status", "demo_ended");
+    await expect(row.getByTestId("row-demo-return")).toHaveText("ออเดอร์เดโม · คืนสินค้าเข้าร้านแล้ว");
+    await expectNoHorizontalScroll(page);
+    await page.screenshot({ path: "test-results/shots/admin-demo-ended-375.png" });
   });
 });

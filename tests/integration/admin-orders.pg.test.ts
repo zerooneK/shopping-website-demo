@@ -434,7 +434,12 @@ describe.skipIf(!HAS_DB)("คำสั่งแอดมินบน Postgres �
         from: "shipped",
         to: "completed",
       });
-      expect((await getItem(post.code)).status).toBe("sold");
+      // ออเดอร์ที่ demo ยืนยัน "ไม่ใช่การขายถาวร": สินค้าไม่เป็น sold แต่ถูกกัน (reserved) ถึง confirmed_at + 20 นาที
+      // แม้ ship/complete ตามมาก็ไม่แตะ (รายละเอียดเต็มดู demo-auto-return.pg.test.ts)
+      const postItem = await getItem(post.code);
+      expect(postItem.status).toBe("reserved");
+      expect(postItem.reservedUntil).not.toBeNull();
+      expect((await getOrder(post.order.id)).confirmedByRole).toBe("demo");
 
       const rej = await awaitingOrder({}, SID_A);
       expect(
@@ -468,7 +473,9 @@ describe.skipIf(!HAS_DB)("คำสั่งแอดมินบน Postgres �
       expect(results.filter((r) => !r.ok && r.error === "not_your_order")).toHaveLength(4);
       expect((await eventsOf(order.id)).filter((e) => e.type === "confirm")).toHaveLength(1);
       expect((await getOrder(order.id)).status).toBe("confirmed");
-      expect((await getItem(code)).status).toBe("sold");
+      // ผู้ชนะเป็น demo → ออเดอร์ทดลอง: สินค้าถูกกัน (reserved) ชั่วคราว ไม่ใช่ sold ถาวร
+      expect((await getOrder(order.id)).confirmedByRole).toBe("demo");
+      expect((await getItem(code)).status).toBe("reserved");
     });
 
     it("M2: เหตุผลที่ demo เขียนมีป้ายต่อท้ายที่ลูกค้าเห็น (คอลัมน์ + หน้า order + timeline); เหตุผลของ owner ไม่มีป้าย", async () => {

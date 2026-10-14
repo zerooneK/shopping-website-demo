@@ -28,7 +28,10 @@ test.describe("flow สั่งซื้อ (375x812)", () => {
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     // แถบเดโม (ขั้น 3c-2): มี cron รีเซ็ตรายวันจริงแล้ว จึงคืนข้อความ "ข้อมูลรีเซ็ตทุกวัน" (SPEC §7)
     await expect(
-      page.getByText("Demo store — ไม่มีการเรียกเก็บเงินจริง · ข้อมูลรีเซ็ตทุกวัน · อย่ากรอกข้อมูลจริง", { exact: true }),
+      page.getByText(
+        "Demo store — ไม่มีการเรียกเก็บเงินจริง · ข้อมูลรีเซ็ตทุกวัน · ออเดอร์ที่ลองยืนยันในหลังบ้านแบบเดโมจะคืนสินค้าเข้าร้านเองหลัง 20 นาที · อย่ากรอกข้อมูลจริง",
+        { exact: true },
+      ),
     ).toBeVisible();
     const visibleSearch = page.locator('input[type="search"]:visible');
     await expect(visibleSearch).toHaveCount(1);
@@ -321,6 +324,11 @@ test.describe("ถ้อยคำสอดคล้องกับสิ่ง�
     expect(about).not.toContain("ยังอยู่ระหว่างพัฒนา");
     expect(about).toContain("ส่วนจัดการสินค้า");
     expect(about).toContain("บัญชีเดโมดูรายการสินค้าได้อย่างเดียว");
+    // ออเดอร์เดโมคืนสินค้าอัตโนมัติ (ไม่อ้างเกิน: ออเดอร์ owner ขายถาวร, ออเดอร์ค้างรอตรวจสลิปยังกันของไว้)
+    expect(about).toContain("กันไว้ 20 นาทีหลังกดยืนยัน");
+    expect(about).toContain("เดโมสิ้นสุดแล้ว");
+    expect(about).toContain("ออเดอร์ที่เจ้าของร้านยืนยันเป็นการขายถาวร");
+    expect(about).toContain("ออเดอร์ที่ค้างรอตรวจสลิปจะยังกันสินค้าไว้");
 
     await page.goto("/privacy");
     const privacy = await page.locator("main").innerText();
@@ -339,6 +347,8 @@ test.describe("ถ้อยคำสอดคล้องกับสิ่ง�
     expect(privacy).toContain("เปลี่ยนสถานะออเดอร์");
     expect(privacy).toContain("เฉพาะออเดอร์ที่ตัวเองสร้างจากเบราว์เซอร์นั้น");
     expect(privacy).toContain("(ข้อความจากผู้ลองเดโม)");
+    expect(privacy).toContain("คืนสินค้าเข้าร้านเองหลัง 20 นาที");
+    expect(privacy).toContain("เดโมสิ้นสุดแล้ว");
     // DEMO_MODE=true ใน e2e → ประโยค "ลองหลังบ้านได้" ต้องแสดง (ผูกกับ isDemoMode())
     expect(about).toContain("ลองได้แบบเดโม");
   });

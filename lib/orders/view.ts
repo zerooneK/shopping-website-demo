@@ -1,4 +1,5 @@
 import type { DeliveryMethod, OrderStatus } from "@/db/schema";
+import { DEMO_ORDER_RETURN_MINUTES } from "@/lib/availability";
 
 /**
  * ตัดสินว่าหน้า /order/[token] ต้องแสดงอะไร (pure function — ไม่แตะ DB/เวลาของแอป)
@@ -14,11 +15,17 @@ export type OrderViewInput = {
   nowMs: number;
   trackingNo?: string | null;
   rejectReason?: string | null;
+  /** ออเดอร์ที่ role demo ยืนยันและเลยเวลาคืนสินค้าแล้ว (ตาม now() ของ DB) */
+  demoEnded?: boolean;
+  /** ออเดอร์นี้ role demo เป็นผู้ยืนยัน → แสดงข้อความว่าจะคืนสินค้าอัตโนมัติ */
+  demoConfirmed?: boolean;
 };
 
 export type OrderViewModel = {
-  /** สถานะที่ใช้แสดงจริง (pending_payment ที่เลยเวลาแล้ว = expired) */
-  effectiveStatus: OrderStatus;
+  /** สถานะที่ใช้แสดงจริง (pending_payment ที่เลยเวลาแล้ว = expired; ออเดอร์เดโมที่คืนสินค้าแล้ว = demo_ended) */
+  effectiveStatus: OrderStatus | "demo_ended";
+  /** ข้อความเสริมสำหรับออเดอร์ที่ผู้ลองเดโมยืนยัน (null = ไม่มี) */
+  demoNote: string | null;
   headline: string;
   body: string;
   tone: OrderTone;
@@ -32,14 +39,22 @@ export type OrderViewModel = {
   rejectReason: string | null;
 };
 
-const TERMINAL: OrderStatus[] = ["completed", "rejected", "expired", "cancelled"];
+const TERMINAL: (OrderStatus | "demo_ended")[] = ["completed", "rejected", "expired", "cancelled", "demo_ended"];
+
+const SOLD_STATUSES: readonly OrderStatus[] = ["confirmed", "shipped", "completed"];
 
 export function describeOrder(input: OrderViewInput): OrderViewModel {
   // นิยามหมดเวลาตรงกับ transition()/SQL: หมดเมื่อ now > expiresAt
   const lapsed = input.status === "pending_payment" && input.nowMs > input.expiresAtMs;
-  const status: OrderStatus = lapsed ? "expired" : input.status;
+  const demoEnded = input.demoEnded === true && SOLD_STATUSES.includes(input.status);
+  const status: OrderStatus | "demo_ended" = lapsed ? "expired" : demoEnded ? "demo_ended" : input.status;
+  const demoNote =
+    input.demoConfirmed === true && !demoEnded && SOLD_STATUSES.includes(input.status)
+      ? `โหมดเดโม: ออเดอร์นี้เป็นการทดลอง ไม่ใช่การขายจริง ระบบจะคืนสินค้าเข้าร้านให้เองภายใน ${DEMO_ORDER_RETURN_MINUTES} นาทีหลังยืนยัน`
+      : null;
   const base = {
     effectiveStatus: status,
+    demoNote,
     showPayment: false,
     keepPolling: !TERMINAL.includes(status),
     showBackToShop: false,
@@ -108,10 +123,28 @@ export function describeOrder(input: OrderViewInput): OrderViewModel {
         showBackToShop: true,
       };
     case "cancelled":
+      // cancelled ที่มี reject_reason = ร้าน (owner) คืนสินค้าเข้าร้านเอง ไม่ใช่ลูกค้ายกเลิก
+      if (input.rejectReason) {
+        return {
+          ...base,
+          headline: "ร้านยกเลิกออเดอร์และคืนสินค้าเข้าร้านแล้ว",
+          body: `เหตุผล: ${input.rejectReason}`,
+          tone: "bad",
+          showBackToShop: true,
+        };
+      }
       return {
         ...base,
         headline: "ยกเลิกออเดอร์แล้ว",
         body: "คุณยกเลิกออเดอร์นี้ สินค้าถูกปล่อยกลับเข้าร้านแล้ว",
+        tone: "neutral",
+        showBackToShop: true,
+      };
+    case "demo_ended":
+      return {
+        ...base,
+        headline: "เดโมสิ้นสุดแล้ว",
+        body: "ออเดอร์นี้ถูกยืนยันในโหมดเดโม ซึ่งไม่ใช่การขายจริง ระบบจึงคืนสินค้าเข้าร้านให้เองแล้ว ถ้ายังสนใจ ลองจองใหม่ได้ถ้ายังไม่มีคนจองไป",
         tone: "neutral",
         showBackToShop: true,
       };
@@ -141,6 +174,7 @@ const LABEL: Record<string, string> = {
   ship: "จัดส่งพัสดุแล้ว",
   complete: "ออเดอร์เสร็จสิ้น",
   cancel: "คุณยกเลิกออเดอร์",
+  return: "ร้านยกเลิกออเดอร์และคืนสินค้าเข้าร้าน",
   expire: "หมดเวลาชำระเงิน ปล่อยสินค้าคืนแล้ว",
 };
 
@@ -163,7 +197,7 @@ export function buildTimeline(events: TimelineEventInput[]): TimelineEntry[] {
     .sort((a, b) => a.createdAtMs - b.createdAtMs)
     .map((e, i) => {
       let detail: string | null = null;
-      if (e.type === "reject") detail = str(e.meta?.reason);
+      if (e.type === "reject" || e.type === "return") detail = str(e.meta?.reason);
       if (e.type === "ship") {
         const t = str(e.meta?.trackingNo);
         detail = t ? `เลขพัสดุ ${t}` : null;

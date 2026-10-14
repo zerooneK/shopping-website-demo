@@ -4,13 +4,14 @@ import { getDb } from "../../db/client";
 import { items, orderEvents, orders } from "../../db/schema";
 import type { OrderStatus } from "../../db/schema";
 import type { AdminSession } from "../auth";
-import { holdingOrderExistsSql } from "../availability";
+import { demoEndedSql, demoReturnAtSql, holdingOrderExistsSql } from "../availability";
 import {
   ADMIN_TABS,
   buildAdminTimeline,
   STATUS_PRIORITY,
   toAdminOrderView,
   type AdminOrderRow,
+  type AdminOrderStatus,
   type AdminOrderView,
   type AdminTabKey,
   type AdminTimelineEntry,
@@ -24,12 +25,19 @@ import {
 
 const LIST_LIMIT = 100;
 
-/** สถานะที่มีผลจริงใน SQL: pending_payment ที่ expires_at < now() = expired (ตรงกับ effectiveOrderStatus) */
-const effectiveStatusSql = sql<OrderStatus>`(CASE WHEN ${orders.status} = 'pending_payment' AND ${orders.expiresAt} < now() THEN 'expired' ELSE ${orders.status}::text END)`;
+/**
+ * สถานะที่มีผลจริงใน SQL (ตรงกับ effectiveOrderStatus): pending_payment ที่ expires_at < now() = expired,
+ * confirmed/shipped/completed ที่เดโมสิ้นสุดแล้ว (demoEndedSql — นิยามเดียวใน lib/availability.ts) = demo_ended
+ * ต้องเป็นนิพจน์ที่ไม่มี parameter เพื่อใช้ใน GROUP BY ได้ (demoEndedSql ฝังค่าคงที่เป็น literal)
+ */
+const effectiveStatusSql = sql<AdminOrderStatus>`(CASE
+  WHEN ${orders.status} = 'pending_payment' AND ${orders.expiresAt} < now() THEN 'expired'
+  WHEN ${orders.status} IN ('confirmed', 'shipped', 'completed') AND ${demoEndedSql("orders")} THEN 'demo_ended'
+  ELSE ${orders.status}::text END)`;
 
 /** ลำดับความสำคัญจาก STATUS_PRIORITY (แหล่งเดียวกับ UI/เทสต์) */
 const prioritySql = sql`(CASE ${effectiveStatusSql} ${sql.join(
-  (Object.keys(STATUS_PRIORITY) as OrderStatus[]).map(
+  (Object.keys(STATUS_PRIORITY) as AdminOrderStatus[]).map(
     (s) => sql.raw(`WHEN '${s}' THEN ${STATUS_PRIORITY[s]}`),
   ),
   sql` `,
@@ -39,6 +47,9 @@ const rowColumns = {
   id: orders.id,
   status: orders.status,
   expiredByClock: sql<boolean>`${orders.expiresAt} < now()`,
+  confirmedByRole: orders.confirmedByRole,
+  demoEnded: sql<boolean>`${demoEndedSql("orders")}`,
+  demoReturnAt: sql<Date | string | null>`${demoReturnAtSql("orders")}`,
   amount: orders.amount,
   shippingFee: orders.shippingFee,
   deliveryMethod: orders.deliveryMethod,
@@ -63,6 +74,9 @@ function toRow(x: {
     id: string;
     status: OrderStatus;
     expiredByClock: boolean;
+    confirmedByRole: AdminOrderRow["confirmedByRole"];
+    demoEnded: boolean;
+    demoReturnAt: Date | string | null;
     amount: number;
     shippingFee: number;
     deliveryMethod: AdminOrderRow["deliveryMethod"];
@@ -86,6 +100,9 @@ function toRow(x: {
     id: x.id,
     status: x.status,
     expiredByClock: x.expiredByClock,
+    confirmedByRole: x.confirmedByRole,
+    demoEnded: x.demoEnded,
+    demoReturnAt: x.demoReturnAt ? new Date(x.demoReturnAt) : null,
     amount: x.amount,
     shippingFee: x.shippingFee,
     deliveryMethod: x.deliveryMethod,
@@ -127,7 +144,7 @@ export async function getAdminDashboard(
     .select({ status: effectiveStatusSql, n: sql<number>`count(*)::int` })
     .from(orders)
     .groupBy(effectiveStatusSql);
-  const byStatus = new Map<OrderStatus, number>(grouped.map((g) => [g.status, g.n]));
+  const byStatus = new Map<AdminOrderStatus, number>(grouped.map((g) => [g.status, g.n]));
   const counts = Object.fromEntries(
     ADMIN_TABS.map((t) => [
       t.key,

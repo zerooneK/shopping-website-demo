@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getAdminDashboard } from "@/lib/admin/queries";
+import { DEMO_ORDER_RETURN_MINUTES } from "@/lib/availability";
 import { ADMIN_TABS, parseTab, type AdminOrderView } from "@/lib/admin/view";
 import { requireSession } from "@/lib/auth-server";
 import { codeNumber, DELIVERY_LABEL, formatPrice, formatThaiDateTime } from "@/lib/labels";
@@ -52,6 +53,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps<"/a
       {session.role === "demo" ? (
         <p className="mt-4 border-l-4 border-l-ink pl-3 text-sm leading-7 text-muted" data-testid="demo-note">
           โหมดเดโม: ชื่อ เบอร์ และที่อยู่ของลูกค้าถูกปิดบังบางส่วน ดูสลิปและเปลี่ยนสถานะได้เฉพาะออเดอร์ที่สร้างจากเบราว์เซอร์นี้ ออเดอร์อื่นดูได้อย่างเดียว
+          · ออเดอร์ที่คุณกดยืนยันในโหมดเดโมจะคืนสินค้าเข้าร้านให้เองภายใน {DEMO_ORDER_RETURN_MINUTES} นาที (ไม่ใช่การขายจริง)
         </p>
       ) : null}
 
@@ -91,6 +93,13 @@ export default async function AdminDashboardPage({ searchParams }: PageProps<"/a
                     ? `ส่งสลิป ${formatThaiDateTime(o.slipUploadedAtMs)}`
                     : `สร้าง ${formatThaiDateTime(o.createdAtMs)}`}
                 </p>
+                {o.demoReturnAtMs !== null ? (
+                  <p className="meta meta-th mt-1 text-muted" data-testid="row-demo-return">
+                    {o.status === "demo_ended"
+                      ? "ออเดอร์เดโม · คืนสินค้าเข้าร้านแล้ว"
+                      : `ออเดอร์เดโม · คืนสินค้าอัตโนมัติ ${formatThaiDateTime(o.demoReturnAtMs)}`}
+                  </p>
+                ) : null}
               </Link>
             </li>
           ))}

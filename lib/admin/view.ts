@@ -17,7 +17,15 @@ import { maskAddress, maskName, maskNote, maskPhone } from "./mask";
  *  - สถานะที่แสดง = สถานะ "ที่มีผลจริง" (pending_payment ที่เลยเวลา = expired) ไม่ใช่ค่าดิบ
  */
 
-export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
+/**
+ * สถานะที่ "มีผลจริง" ของออเดอร์ในหลังบ้าน = สถานะที่เก็บ + สถานะอนุพันธ์ที่ตัดสินด้วย now() ของ DB:
+ *  - pending_payment ที่เลยเวลา → expired
+ *  - confirmed/shipped/completed ที่ role demo ยืนยันและเลย DEMO_ORDER_RETURN_MINUTES นาที → demo_ended
+ *    (สินค้าคืนเข้าร้านเองแล้ว; ค่าที่เก็บใน DB ยังเป็น confirmed/... เพราะไม่มีงานเขียนตามเวลา)
+ */
+export type AdminOrderStatus = OrderStatus | "demo_ended";
+
+export const ORDER_STATUS_LABEL: Record<AdminOrderStatus, string> = {
   pending_payment: "รอชำระเงิน",
   awaiting_review: "รอตรวจสลิป",
   confirmed: "ยืนยันแล้ว",
@@ -26,10 +34,11 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   rejected: "ปฏิเสธแล้ว",
   expired: "หมดเวลา",
   cancelled: "ยกเลิก",
+  demo_ended: "เดโมสิ้นสุดแล้ว (คืนสินค้าแล้ว)",
 };
 
 /** ลำดับความสำคัญใน dashboard: เลขน้อย = ต้องจัดการก่อน (awaiting_review ขึ้นบนสุด) */
-export const STATUS_PRIORITY: Record<OrderStatus, number> = {
+export const STATUS_PRIORITY: Record<AdminOrderStatus, number> = {
   awaiting_review: 0,
   confirmed: 1,
   shipped: 2,
@@ -38,11 +47,20 @@ export const STATUS_PRIORITY: Record<OrderStatus, number> = {
   rejected: 5,
   expired: 5,
   cancelled: 5,
+  demo_ended: 5,
 };
 
-/** สถานะที่มีผลจริง: pending_payment ที่ expires_at < now() (ตามเวลา DB) ถือเป็น expired */
-export function effectiveOrderStatus(status: OrderStatus, expiredByClock: boolean): OrderStatus {
-  return status === "pending_payment" && expiredByClock ? "expired" : status;
+/** สถานะที่มีผลจริง: pending_payment ที่ expires_at < now() (ตามเวลา DB) ถือเป็น expired; ออเดอร์เดโมที่เลยเวลา = demo_ended */
+export function effectiveOrderStatus(
+  status: OrderStatus,
+  expiredByClock: boolean,
+  demoEnded = false,
+): AdminOrderStatus {
+  if (status === "pending_payment" && expiredByClock) return "expired";
+  if (demoEnded && (status === "confirmed" || status === "shipped" || status === "completed")) {
+    return "demo_ended";
+  }
+  return status;
 }
 
 // ---------------------------------------------------------------- แท็บ
@@ -53,7 +71,7 @@ export const ADMIN_TABS: readonly {
   key: AdminTabKey;
   label: string;
   /** null = ทุกสถานะ */
-  statuses: readonly OrderStatus[] | null;
+  statuses: readonly AdminOrderStatus[] | null;
 }[] = [
   { key: "all", label: "ทั้งหมด", statuses: null },
   { key: "review", label: "รอตรวจสลิป", statuses: ["awaiting_review"] },
@@ -61,7 +79,7 @@ export const ADMIN_TABS: readonly {
   { key: "shipped", label: "จัดส่งแล้ว", statuses: ["shipped"] },
   { key: "pending", label: "รอชำระ", statuses: ["pending_payment"] },
   { key: "completed", label: "เสร็จสิ้น", statuses: ["completed"] },
-  { key: "closed", label: "ปิดแล้ว", statuses: ["rejected", "expired", "cancelled"] },
+  { key: "closed", label: "ปิดแล้ว", statuses: ["rejected", "expired", "cancelled", "demo_ended"] },
 ];
 
 export function parseTab(raw: string | string[] | undefined): AdminTabKey {
@@ -71,8 +89,8 @@ export function parseTab(raw: string | string[] | undefined): AdminTabKey {
 
 // ---------------------------------------------------------------- action ที่ทำได้
 
-export type AdminAction = "confirm" | "reject" | "ship" | "complete";
-const ACTION_ORDER: readonly AdminAction[] = ["confirm", "reject", "ship", "complete"];
+export type AdminAction = "confirm" | "reject" | "ship" | "complete" | "return";
+const ACTION_ORDER: readonly AdminAction[] = ["confirm", "reject", "ship", "complete", "return"];
 
 /** ใช้ transition() เป็นแหล่งความจริงเดียว: action ไหนผ่านได้ในสถานะ/วิธีรับของนี้ (ไม่เช็กเวลา: action ฝั่งแอดมินไม่ผูกกับ expiresAt) */
 export function availableActions(status: OrderStatus, deliveryMethod: DeliveryMethod): AdminAction[] {
@@ -94,6 +112,12 @@ export type AdminOrderRow = {
   status: OrderStatus;
   /** expires_at < now() ตามเวลา DB */
   expiredByClock: boolean;
+  /** role ของผู้ที่ยืนยันออเดอร์ (NULL = ยังไม่เคยยืนยัน/ก่อนมีคอลัมน์) */
+  confirmedByRole: "owner" | "demo" | null;
+  /** ออเดอร์ที่ demo ยืนยันและเลยเวลาคืนสินค้าแล้ว (ตาม now() ของ DB — demoEndedSql) */
+  demoEnded: boolean;
+  /** เวลาที่ออเดอร์เดโมจะ/ได้คืนสินค้า (confirmed_at + N) — NULL ถ้าไม่ใช่ออเดอร์ที่ demo ยืนยัน */
+  demoReturnAt: Date | null;
   amount: number;
   shippingFee: number;
   deliveryMethod: DeliveryMethod;
@@ -122,7 +146,7 @@ export type AdminOrderRow = {
 export type AdminOrderView = {
   id: string;
   /** สถานะที่มีผลจริง */
-  status: OrderStatus;
+  status: AdminOrderStatus;
   statusLabel: string;
   deliveryMethod: DeliveryMethod;
   amount: number;
@@ -144,6 +168,11 @@ export type AdminOrderView = {
   slipIsHeic: boolean;
   item: { code: string; title: string; display: DisplayStatus | null };
   actions: AdminAction[];
+  /**
+   * ออเดอร์ที่ role demo ยืนยัน: เวลาที่สินค้าคืนเข้าร้าน (ms; อดีต = คืนแล้ว) — NULL ถ้าไม่ใช่
+   * ใช้แสดงข้อความ "ออเดอร์เดโม คืนสินค้าอัตโนมัติ" (ไม่ได้ใช้ตัดสินสิทธิ์/สถานะ — ตัดสินที่ DB)
+   */
+  demoReturnAtMs: number | null;
   /** ไม่ว่าง = เปลี่ยนสถานะไม่ได้เพราะไม่ใช่ออเดอร์ของ session เดโมนี้ (ดูได้อย่างเดียว) — ข้อความอธิบายเหตุผล */
   readOnlyReason: string | null;
 };
@@ -159,7 +188,7 @@ export function canTransitionOrder(session: AdminSession, orderDemoSessionId: st
 }
 
 export function toAdminOrderView(row: AdminOrderRow, session: AdminSession): AdminOrderView {
-  const status = effectiveOrderStatus(row.status, row.expiredByClock);
+  const status = effectiveOrderStatus(row.status, row.expiredByClock, row.demoEnded);
   const seePii = can(session, "pii.read");
   const hasSlip = row.slipPath !== null;
   const mayTransition = canTransitionOrder(session, row.demoSessionId);
@@ -192,9 +221,13 @@ export function toAdminOrderView(row: AdminOrderRow, session: AdminSession): Adm
         held: row.item.held,
       }),
     },
-    // action เฉพาะสถานะที่มีผลจริงตรงกับค่าที่เก็บ (pending ที่หมดเวลาแล้วไม่มี action)
+    // action เฉพาะสถานะที่มีผลจริงตรงกับค่าที่เก็บ (pending ที่หมดเวลา / เดโมสิ้นสุดแล้ว ไม่มี action)
+    // "return" เป็นของ owner เท่านั้น (บังคับซ้ำที่ adminTransition)
     actions:
-      mayTransition && status === row.status ? availableActions(row.status, row.deliveryMethod) : [],
+      mayTransition && status === row.status
+        ? availableActions(row.status, row.deliveryMethod).filter((a) => a !== "return" || can(session, "order.return"))
+        : [],
+    demoReturnAtMs: row.demoReturnAt ? new Date(row.demoReturnAt).getTime() : null,
     readOnlyReason: mayTransition ? null : DEMO_READ_ONLY_REASON,
   };
 }
@@ -222,6 +255,7 @@ const ADMIN_LABEL: Record<string, string> = {
   expire: "หมดเวลาชำระเงิน (ระบบ)",
   confirm: "ยืนยันการชำระเงิน",
   reject: "ปฏิเสธสลิป",
+  return: "คืนสินค้าเข้าร้าน/ยกเลิกออเดอร์",
   ship: "จัดส่งแล้ว",
   complete: "ปิดงาน",
 };
@@ -239,7 +273,7 @@ export function buildAdminTimeline(events: AdminTimelineInput[]): AdminTimelineE
     .sort((a, b) => a.createdAtMs - b.createdAtMs)
     .map((e, i) => {
       const parts: string[] = [];
-      if (e.type === "reject") {
+      if (e.type === "reject" || e.type === "return") {
         const r = str(e.meta?.reason);
         if (r) parts.push(`เหตุผล: ${r}`);
       }
@@ -278,6 +312,7 @@ export const adminTransitionSchema = z.discriminatedUnion("intent", [
   z.object({ orderId: orderIdSchema, intent: z.literal("reject"), reason: reasonSchema }),
   z.object({ orderId: orderIdSchema, intent: z.literal("ship"), trackingNo: trackingSchema }),
   z.object({ orderId: orderIdSchema, intent: z.literal("complete") }),
+  z.object({ orderId: orderIdSchema, intent: z.literal("return"), reason: reasonSchema }),
 ]);
 
 export type AdminTransitionInput = z.infer<typeof adminTransitionSchema>;

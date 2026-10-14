@@ -3,6 +3,7 @@ import { asc, eq, sql } from "drizzle-orm";
 import { getDb } from "../../db/client";
 import type { DeliveryMethod, OrderStatus } from "../../db/schema";
 import { items, orderEvents, orders } from "../../db/schema";
+import { demoEndedSql, demoReturnAtSql } from "../availability";
 import { expireOrderIfStale } from "./commands";
 import { isValidOrderToken } from "./view";
 
@@ -25,6 +26,10 @@ export type CustomerOrder = {
   rejectReason: string | null;
   expiresAt: Date;
   dbNow: Date;
+  /** ออเดอร์ที่ role demo ยืนยัน: เวลาที่คืนสินค้าเข้าร้าน (ตาม DB) — null ถ้าไม่ใช่ */
+  demoReturnAt: Date | null;
+  /** ออเดอร์เดโมที่เลยเวลาแล้ว (คืนสินค้าเข้าร้านเองแล้ว) */
+  demoEnded: boolean;
   item: {
     code: string;
     title: string;
@@ -50,6 +55,8 @@ export async function getCustomerOrder(token: string): Promise<CustomerOrder | n
       rejectReason: orders.rejectReason,
       expiresAt: orders.expiresAt,
       dbNow: sql<Date | string>`now()`,
+      demoReturnAt: sql<Date | string | null>`${demoReturnAtSql("orders")}`,
+      demoEnded: sql<boolean>`${demoEndedSql("orders")}`,
       itemCode: items.code,
       itemTitle: items.title,
       itemImages: items.images,
@@ -77,6 +84,8 @@ export async function getCustomerOrder(token: string): Promise<CustomerOrder | n
     rejectReason: row.rejectReason,
     expiresAt: row.expiresAt,
     dbNow: new Date(row.dbNow),
+    demoReturnAt: row.demoReturnAt ? new Date(row.demoReturnAt) : null,
+    demoEnded: row.demoEnded,
     item: {
       code: row.itemCode,
       title: row.itemTitle,
@@ -87,7 +96,8 @@ export async function getCustomerOrder(token: string): Promise<CustomerOrder | n
 }
 
 export type OrderStatusSnapshot = {
-  status: OrderStatus;
+  /** สถานะที่มีผลจริงสำหรับ poll: ออเดอร์เดโมที่เลยเวลา = "demo_ended" (ค่าที่เก็บใน DB ยังเป็น confirmed/...) */
+  status: OrderStatus | "demo_ended";
   expiresAt: Date;
   dbNow: Date;
 };
@@ -102,11 +112,17 @@ export async function getOrderStatusSnapshot(token: string): Promise<OrderStatus
       status: orders.status,
       expiresAt: orders.expiresAt,
       dbNow: sql<Date | string>`now()`,
+      demoEnded: sql<boolean>`${demoEndedSql("orders")}`,
     })
     .from(orders)
     .where(eq(orders.token, token));
   if (!row) return null;
-  return { status: row.status, expiresAt: row.expiresAt, dbNow: new Date(row.dbNow) };
+  const ended = row.demoEnded && (row.status === "confirmed" || row.status === "shipped" || row.status === "completed");
+  return {
+    status: ended ? "demo_ended" : row.status,
+    expiresAt: row.expiresAt,
+    dbNow: new Date(row.dbNow),
+  };
 }
 
 /** ข้อมูลที่ API ต้องใช้ตอนตรวจ token ก่อนออก Blob token / รับ pathname สลิป (ไม่ส่งออกไปที่ client) */

@@ -141,6 +141,7 @@ const VALID: Record<OrderEventType, OrderStatus[]> = {
   reject: ["awaiting_review"],
   ship: ["confirmed"],
   complete: ["shipped", "confirmed"], // confirmed เฉพาะ pickup
+  return: ["confirmed", "shipped", "completed"], // owner คืนสินค้าเข้าร้าน (ผู้เรียกจำกัด role)
 };
 
 describe("transition: exhaustive matrix", () => {
@@ -167,12 +168,45 @@ describe("transition: exhaustive matrix", () => {
     }
   }
 
-  it("terminal states accept no events", () => {
+  it("terminal states accept no events (completed รับได้เฉพาะ return ของ owner)", () => {
     for (const status of ["completed", "rejected", "expired", "cancelled"] as OrderStatus[]) {
       for (const type of events) {
+        if (status === "completed" && type === "return") continue;
         const r = transition(order(status, "post"), { type, now: AFTER, reason: "r", trackingNo: "t" });
         expect(r.ok).toBe(false);
       }
+    }
+  });
+});
+
+describe("transition: return (owner คืนสินค้าเข้าร้าน)", () => {
+  it.each(["confirmed", "shipped", "completed"] as OrderStatus[])("%s → cancelled, สินค้า available, meta.reason ถูก trim", (status) => {
+    const r = transition(order(status, "post"), { type: "return", now: AFTER, reason: "  ลูกค้าขอคืน  " });
+    expect(r).toMatchObject({
+      ok: true,
+      from: status,
+      to: "cancelled",
+      actor: "admin",
+      itemStatus: "available",
+      clearReservedUntil: false,
+      eventType: "return",
+      meta: { reason: "ลูกค้าขอคืน" },
+    });
+  });
+
+  it("ต้องมีเหตุผล", () => {
+    expect(transition(order("confirmed"), { type: "return", now: AFTER })).toEqual({ ok: false, error: "reason_required" });
+    expect(transition(order("confirmed"), { type: "return", now: AFTER, reason: "  " })).toEqual({ ok: false, error: "reason_required" });
+  });
+
+  it("เป็นคำสั่งของ admin เท่านั้น (ลูกค้า/ระบบสั่งไม่ได้)", () => {
+    expect(transition(order("confirmed"), { type: "return", now: AFTER, reason: "x" }, "customer")).toEqual({ ok: false, error: "wrong_actor" });
+    expect(transition(order("confirmed"), { type: "return", now: AFTER, reason: "x" }, "system")).toEqual({ ok: false, error: "wrong_actor" });
+  });
+
+  it("ก่อนยืนยัน (pending/awaiting) คืนไม่ได้ — ต้องใช้ reject/cancel", () => {
+    for (const s of ["pending_payment", "awaiting_review"] as OrderStatus[]) {
+      expect(transition(order(s), { type: "return", now: AFTER, reason: "x" })).toEqual({ ok: false, error: "invalid_transition" });
     }
   });
 });

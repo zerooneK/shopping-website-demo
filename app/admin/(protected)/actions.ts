@@ -21,6 +21,8 @@ const MESSAGE: Record<AdminCommandError, string> = {
   not_found: "ไม่พบออเดอร์นี้",
   not_your_order: "บัญชีเดโมเปลี่ยนสถานะได้เฉพาะออเดอร์ที่สร้างจากเบราว์เซอร์นี้เท่านั้น (ออเดอร์อื่นดูได้อย่างเดียว)",
   invalid_state: "สถานะออเดอร์เปลี่ยนไปแล้ว (อาจมีคนดำเนินการไปก่อน) กรุณารีเฟรชดูสถานะล่าสุด",
+  demo_ended: "ออเดอร์เดโมนี้สิ้นสุดแล้ว ระบบคืนสินค้าเข้าร้านให้เองแล้ว จึงเปลี่ยนสถานะต่อไม่ได้",
+  owner_only: "การคืนสินค้าเข้าร้านทำได้เฉพาะเจ้าของร้าน",
   reason_required: "กรุณาระบุเหตุผล",
   tracking_required: "กรุณาระบุเลขพัสดุ",
   pickup_cannot_ship: "ออเดอร์นัดรับไม่ต้องจัดส่ง ใช้ปุ่มปิดงานแทน",
@@ -31,6 +33,7 @@ const SUCCESS: Record<string, string> = {
   reject: "ปฏิเสธสลิปแล้ว ปล่อยสินค้ากลับเข้าร้านแล้ว",
   ship: "บันทึกการจัดส่งแล้ว",
   complete: "ปิดงานแล้ว",
+  return: "คืนสินค้าเข้าร้านและยกเลิกออเดอร์แล้ว",
 };
 
 export async function transitionOrderAction(
@@ -58,6 +61,10 @@ export async function transitionOrderAction(
     return { error: userField ? issue.message : "ข้อมูลไม่ถูกต้อง" };
   }
   const input = parsed.data;
+  // คืนสินค้าเข้าร้านเป็นของ owner เท่านั้น (ตรวจที่นี่และซ้ำใน adminTransition)
+  if (input.intent === "return" && !can(session, "order.return")) {
+    return { error: MESSAGE.owner_only };
+  }
 
   let result;
   try {
@@ -65,8 +72,8 @@ export async function transitionOrderAction(
       orderId: input.orderId,
       actor: session,
       intent:
-        input.intent === "reject"
-          ? { type: "reject", reason: input.reason }
+        input.intent === "reject" || input.intent === "return"
+          ? { type: input.intent, reason: input.reason }
           : input.intent === "ship"
             ? { type: "ship", trackingNo: input.trackingNo }
             : { type: input.intent },

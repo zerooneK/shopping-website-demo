@@ -41,6 +41,8 @@ export default async function OrderPage({ params }: PageProps<"/order/[token]">)
     nowMs: order.dbNow.getTime(),
     trackingNo: order.trackingNo,
     rejectReason: order.rejectReason,
+    demoEnded: order.demoEnded,
+    demoConfirmed: order.demoReturnAt !== null,
   });
   const timeline = buildTimeline(
     order.events.map((e) => ({ type: e.type, meta: e.meta, createdAtMs: e.createdAt.getTime() })),
@@ -67,6 +69,14 @@ export default async function OrderPage({ params }: PageProps<"/order/[token]">)
       <p className="mt-3 max-w-xl leading-8 text-muted" data-testid="order-body">
         {view.body}
       </p>
+      {view.demoNote ? (
+        <p
+          className="mt-4 max-w-xl border-l-4 border-l-ink pl-3 text-sm leading-7 text-muted"
+          data-testid="order-demo-note"
+        >
+          {view.demoNote}
+        </p>
+      ) : null}
       {view.effectiveStatus === "shipped" && view.trackingNo ? (
         <p className="meta meta-th mt-2 text-ink">เลขพัสดุ: {view.trackingNo}</p>
       ) : null}

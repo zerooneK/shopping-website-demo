@@ -122,6 +122,8 @@ export async function verifySession(
 export type Permission =
   /** ยืนยัน/ปฏิเสธ/จัดส่ง/ปิดงาน */
   | "order.transition"
+  /** คืนสินค้าเข้าร้าน/ยกเลิกออเดอร์ที่ยืนยันแล้ว — owner เท่านั้น (demo คืนอัตโนมัติตามเวลาอยู่แล้ว) */
+  | "order.return"
   /** เห็นชื่อ/เบอร์/ที่อยู่/หมายเหตุของลูกค้าจริง */
   | "pii.read"
   /** ดูสลิปของทุกออเดอร์ (demo ดูได้เฉพาะของ browser ตัวเอง) */
@@ -139,6 +141,7 @@ export type Permission =
 
 const OWNER_PERMISSIONS: ReadonlySet<Permission> = new Set([
   "order.transition",
+  "order.return",
   "pii.read",
   "slip.read_all",
   "item.edit",

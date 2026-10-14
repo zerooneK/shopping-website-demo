@@ -13,7 +13,10 @@
 export const MAX_PENDING_PER_SESSION = 2;
 export const MAX_ORDERS_PER_HOUR = 5;
 
-/** ต่อ IP: ออเดอร์ที่ยังถือสินค้า (pending_payment ที่ยังไม่หมดเวลา + awaiting_review) */
+/**
+ * ต่อ IP: ออเดอร์ที่ยังถือสินค้า (pending_payment ที่ยังไม่หมดเวลา + awaiting_review
+ * + ออเดอร์ที่ role demo ยืนยันและยังไม่ถึงเวลาคืนสินค้า — ดู ipHoldingOrderCondition ใน lib/availability.ts)
+ */
 export const MAX_HOLDING_PER_IP = 3;
 /** ต่อ IP: ออเดอร์ที่สร้างใน 1 ชั่วโมง (ทุกสถานะ) */
 export const MAX_ORDERS_PER_IP_PER_HOUR = 8;
@@ -26,7 +29,7 @@ export type RateLimitCounts = {
 };
 
 export type IpRateLimitCounts = {
-  /** pending_payment ที่ยังไม่หมดเวลา + awaiting_review ของ IP นี้ */
+  /** pending_payment ที่ยังไม่หมดเวลา + awaiting_review + ออเดอร์เดโมที่ยืนยันแล้วและยังไม่คืนสินค้า ของ IP นี้ */
   holding: number;
   lastHour: number;
 };
@@ -66,7 +69,7 @@ export const RATE_LIMIT_MESSAGE: Record<RateLimitReason, string> = {
     "คุณมีออเดอร์ที่รอชำระเงินครบ 2 รายการแล้ว กรุณาชำระหรือยกเลิกรายการเดิมก่อนจองชิ้นใหม่",
   too_many_per_hour: "สร้างออเดอร์ครบ 5 รายการในชั่วโมงนี้แล้ว (จำกัดเพื่อกันการกดจองเล่น) กรุณารอสักครู่",
   ip_too_many_holding:
-    "การเชื่อมต่อนี้มีออเดอร์ที่ยังค้างอยู่ครบ 3 รายการแล้ว กรุณาชำระหรือยกเลิกรายการเดิมก่อนจองชิ้นใหม่",
+    "การเชื่อมต่อนี้มีออเดอร์ที่ยังค้างอยู่ครบ 3 รายการแล้ว (รวมออเดอร์เดโมที่ยืนยันแล้วซึ่งยังไม่คืนสินค้าเข้าร้าน) กรุณาชำระ ยกเลิก หรือรอให้ครบเวลาก่อนจองชิ้นใหม่",
   ip_too_many_per_hour:
     "การเชื่อมต่อนี้สร้างออเดอร์ครบ 8 รายการในชั่วโมงนี้แล้ว (จำกัดเพื่อกันการกดจองเล่น) กรุณาลองใหม่ภายหลัง",
 };

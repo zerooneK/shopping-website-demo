@@ -49,6 +49,16 @@ export default async function AdminOrderPage({ params }: PageProps<"/admin/order
       >
         {order.statusLabel}
       </p>
+      {order.demoReturnAtMs !== null ? (
+        <p
+          className="mt-4 border-l-4 border-l-ink pl-3 text-sm leading-7 text-muted"
+          data-testid="demo-return-note"
+        >
+          {order.status === "demo_ended"
+            ? `ออเดอร์นี้ถูกยืนยันโดยผู้ลองเดโม และสิ้นสุดแล้ว: ระบบคืนสินค้าเข้าร้านให้เองเมื่อ ${formatThaiDateTime(order.demoReturnAtMs)} (ไม่ใช่การขายจริง)`
+            : `ออเดอร์นี้ถูกยืนยันโดยผู้ลองเดโม: ระบบจะคืนสินค้าเข้าร้านให้เองประมาณ ${formatThaiDateTime(order.demoReturnAtMs)} (ไม่ใช่การขายจริง)`}
+        </p>
+      ) : null}
 
       <section aria-labelledby="summary-heading" className="mt-8 border-t border-rule pt-6">
         <h2 id="summary-heading" className="meta meta-th text-ink">

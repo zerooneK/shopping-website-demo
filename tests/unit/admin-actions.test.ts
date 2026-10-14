@@ -299,6 +299,35 @@ describe("transitionOrderAction", () => {
     expect(mocks.adminTransition).not.toHaveBeenCalled();
   });
 
+  it("return (คืนสินค้าเข้าร้าน): owner ส่งเหตุผลเข้าคำสั่ง; demo ถูกปฏิเสธที่ action โดยไม่เรียกคำสั่ง", async () => {
+    await loginAs("owner");
+    mocks.adminTransition.mockResolvedValue({ ok: true, from: "confirmed", to: "cancelled" });
+    const ok = await transitionOrderAction({}, form({ orderId: ORDER_ID, intent: "return", reason: "ลูกค้าขอคืน" }));
+    expect(ok).toEqual({ ok: true, message: "คืนสินค้าเข้าร้านและยกเลิกออเดอร์แล้ว" });
+    expect(mocks.adminTransition).toHaveBeenCalledWith(
+      { fake: "db" },
+      { orderId: ORDER_ID, actor: { role: "owner" }, intent: { type: "return", reason: "ลูกค้าขอคืน" } },
+    );
+    // ไม่มีเหตุผล = Zod ปฏิเสธ
+    mocks.adminTransition.mockClear();
+    expect((await transitionOrderAction({}, form({ orderId: ORDER_ID, intent: "return" }))).error).toBe("กรุณาระบุเหตุผล");
+    expect(mocks.adminTransition).not.toHaveBeenCalled();
+
+    await loginAs("demo");
+    const denied = await transitionOrderAction({}, form({ orderId: ORDER_ID, intent: "return", reason: "x" }));
+    expect(denied.error).toContain("เฉพาะเจ้าของร้าน");
+    expect(mocks.adminTransition).not.toHaveBeenCalled();
+  });
+
+  it("เดโมสิ้นสุดแล้วจากคำสั่ง → ข้อความไทยที่อธิบายได้ ไม่ revalidate", async () => {
+    await loginAs("owner");
+    mocks.adminTransition.mockResolvedValueOnce({ ok: false, error: "demo_ended", status: "confirmed" });
+    const r = await transitionOrderAction({}, form({ orderId: ORDER_ID, intent: "complete" }));
+    expect(r.error).toContain("สิ้นสุดแล้ว");
+    expect(r.error).toContain("คืนสินค้าเข้าร้าน");
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
+  });
+
   it("คำสั่งล้มเหลว (มีคนทำไปก่อน) → ข้อความไทย ไม่ revalidate; exception ภายในไม่รั่ว", async () => {
     await loginAs("owner");
     mocks.adminTransition.mockResolvedValueOnce({ ok: false, error: "invalid_state", status: "confirmed" });

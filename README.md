@@ -54,6 +54,19 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 2. ตั้ง **`BLOB_READ_WRITE_TOKEN`** (เชื่อม Blob store แบบ private) — ไม่ตั้ง = cron ข้ามขั้นลบสลิป (log `no_blob_token`) ไฟล์สลิปจะค้างอยู่ใน Blob
 3. หลัง deploy ตรวจ **log ของ cron รอบแรก** (Vercel → Logs / Cron Jobs) ว่าตอบ `status: "ran"` และมี `blob.deleted` (จำนวนไฟล์สลิปที่ลบ; 0 ได้ถ้าไม่มีสลิป) — ถ้าเป็น `skipped_locked` ซ้ำๆ, `db_reset_blob_failed` หรือ 401/500 ให้แก้ก่อน เพราะข้อความบนเว็บอ้างว่ารีเซ็ตทุกวัน
 
+## ออเดอร์เดโมคืนสินค้าเอง และการคืนสินค้าโดยเจ้าของร้าน
+
+ปุ่ม "ลองหลังบ้านแบบเดโม" ทำให้ใครก็กดยืนยันออเดอร์ของตัวเองได้ ถ้าการยืนยันนั้นขายสินค้าถาวร ผู้ชมไม่กี่คนก็ทำให้ทั้งร้านหมดได้ จึงแยกตามว่า **ใครกดยืนยัน** (`orders.confirmed_by_role` = `owner` | `demo`, migration `0002`):
+
+- **owner ยืนยัน** = ขายถาวร (สินค้า `sold`) ไม่คืนเอง — เจ้าของคืนสินค้าเข้าร้านเองได้จากหน้าออเดอร์หลังบ้านด้วยปุ่ม "คืนสินค้าเข้าร้าน" (ต้องใส่เหตุผล; ใช้ได้กับ `confirmed`/`shipped`/`completed`)
+- **demo ยืนยัน** = ออเดอร์ทดลอง: สินค้าถูกกัน (`reserved`) ถึง `confirmed_at + 20 นาที` (`DEMO_ORDER_RETURN_MINUTES` ใน `lib/availability.ts`) แล้วคืนเป็นว่างเอง ตัดสินแบบ lazy ด้วย `now()` ของ DB (ไม่มี cron เพิ่ม) หน้าออเดอร์/หลังบ้านจะแสดง "เดโมสิ้นสุดแล้ว" และนับในแท็บ "ปิดแล้ว"
+- ระหว่าง 20 นาที ออเดอร์เดโมที่ยืนยันแล้วนับรวมในเพดาน "ถือสินค้าต่อ IP" (≤ 3) ด้วย
+- นิยามว่าใครถือสินค้าอยู่มีที่เดียว: `lib/availability.ts` (`holdingOrderExistsSql`)
+
+## ย้ายฐานข้อมูล (migration 0002)
+
+เพิ่มคอลัมน์ `orders.confirmed_by_role` (nullable + CHECK) — additive ไม่ลบ/แก้ข้อมูลเดิม ออเดอร์ที่ยืนยันก่อนมีคอลัมน์ (NULL) ถือเป็นขายถาวร ฐานข้อมูลของโปรเจกต์นี้สร้างด้วย `npm run db:push` (ไม่มีตาราง migration history) จึงใช้ `npm run db:push` กับ Neon เดิมได้ (จะเห็นเพียง `ALTER TABLE ... ADD COLUMN` + `ADD CONSTRAINT`) หรือรันไฟล์ `db/migrations/0002_*.sql` ตรงๆ — ต้องทำก่อนรันแอปเวอร์ชันนี้ ไม่งั้นทุก query ของ orders ล้ม
+
 ## รูปสินค้า
 
 เจ้าของร้านอัปโหลดรูปที่ `/admin/items/[id]` (Vercel Blob client upload → `items/`) Blob store ที่ใช้เก็บสลิปเป็นแบบ private (ระดับ access เป็นของ store ไม่ใช่รายไฟล์) รูปสินค้าจึงอยู่ใน store เดียวกันและถูกเสิร์ฟสาธารณะผ่าน `GET /api/item-images/<ชื่อไฟล์>` ซึ่งอ่านได้เฉพาะ `items/` ส่วนบัญชีเดโมอัปโหลด/ลบรูปและแก้สินค้าไม่ได้

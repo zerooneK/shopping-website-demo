@@ -105,6 +105,10 @@ export const orders = pgTable(
     demoSessionId: text("demo_session_id"),
     // HMAC-SHA256 ของ IP ผู้สั่ง (ห้ามเก็บ IP ดิบ) ใช้ทำ rate limit ตาม IP (SPEC §7) — nullable เพราะออเดอร์เก่าไม่มี
     clientIpHash: text("client_ip_hash"),
+    // role ของผู้ที่กด "ยืนยัน" (owner | demo) — ตั้งครั้งเดียวตอน confirm ใน transaction เดียวกับการเปลี่ยนสถานะ
+    // 'demo' = ออเดอร์ทดลอง: คืนสินค้าเข้าร้านเองหลัง DEMO_ORDER_RETURN_MINUTES นาที (lib/availability.ts)
+    // NULL = ไม่เคยถูกยืนยัน หรือยืนยันก่อนมีคอลัมน์นี้ → ถือเป็นการขายถาวร (ไม่คืนเอง)
+    confirmedByRole: text("confirmed_by_role").$type<"owner" | "demo">(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -116,6 +120,10 @@ export const orders = pgTable(
     index("orders_status_created_idx").on(t.status, t.createdAt),
     index("orders_item_idx").on(t.itemId),
     index("orders_ip_created_idx").on(t.clientIpHash, t.createdAt),
+    check(
+      "orders_confirmed_by_role_check",
+      sql`${t.confirmedByRole} IS NULL OR ${t.confirmedByRole} IN ('owner', 'demo')`,
+    ),
   ],
 );
 

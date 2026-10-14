@@ -40,11 +40,14 @@ export const E2E_CODES = {
   itemStatus: "V008",
   itemHeld: "V009",
   itemDemo: "V010",
+  /** คืนสินค้าเข้าร้านโดย owner / ออเดอร์เดโมสิ้นสุดแล้ว (admin.spec.ts) */
+  ownerReturn: "V011",
+  demoEnded: "V012",
 } as const;
 
 const ALL_CODES = [
   ...Array.from({ length: 11 }, (_, i) => `T${981 + i}`),
-  ...Array.from({ length: 10 }, (_, i) => `V${String(i + 1).padStart(3, "0")}`),
+  ...Array.from({ length: 12 }, (_, i) => `V${String(i + 1).padStart(3, "0")}`),
 ];
 
 function sampleImages(): ItemImage[] {
@@ -121,6 +124,8 @@ export async function createFixtures() {
       { ...base, code: E2E_CODES.itemStatus, title: "ของทดสอบ e2e เปลี่ยนสถานะ", price: 490, sortOrder: 97 },
       { ...base, code: E2E_CODES.itemHeld, title: "ของทดสอบ e2e ออเดอร์ถือ", price: 500, sortOrder: 98 },
       { ...base, code: E2E_CODES.itemDemo, title: "ของทดสอบ e2e เดโมดูสินค้า", price: 510, sortOrder: 99 },
+      { ...base, code: E2E_CODES.ownerReturn, title: "ของทดสอบ e2e คืนสินค้า", price: 520, sortOrder: 100 },
+      { ...base, code: E2E_CODES.demoEnded, title: "ของทดสอบ e2e เดโมสิ้นสุด", price: 530, sortOrder: 101 },
     ]);
 }
 

@@ -31,6 +31,9 @@ function row(over: Partial<AdminOrderRow> = {}): AdminOrderRow {
     id: "11111111-1111-4111-8111-111111111111",
     status: "awaiting_review",
     expiredByClock: false,
+    confirmedByRole: null,
+    demoEnded: false,
+    demoReturnAt: null,
     amount: 500,
     shippingFee: 50,
     deliveryMethod: "post",
@@ -201,15 +204,78 @@ describe("สถานะที่แสดง (ไม่แสดงสถา�
   });
 });
 
+describe("ออเดอร์เดโม: demo_ended และ action return", () => {
+  const sold = (over: Partial<AdminOrderRow> = {}) =>
+    row({ status: "confirmed", deliveryMethod: "pickup", slipPath: null, ...over });
+
+  it("effectiveOrderStatus: confirmed/shipped/completed + demoEnded = demo_ended; สถานะอื่นไม่เปลี่ยน", () => {
+    for (const s of ["confirmed", "shipped", "completed"] as OrderStatus[]) {
+      expect(effectiveOrderStatus(s, false, true)).toBe("demo_ended");
+      expect(effectiveOrderStatus(s, false, false)).toBe(s);
+    }
+    expect(effectiveOrderStatus("awaiting_review", false, true)).toBe("awaiting_review");
+    expect(effectiveOrderStatus("pending_payment", true, true)).toBe("expired");
+    expect(effectiveOrderStatus("rejected", false, true)).toBe("rejected");
+  });
+
+  it("DTO ที่เดโมสิ้นสุดแล้ว: status demo_ended + ป้ายเข้าใจได้ + ไม่มี action ใดๆ (แม้ owner)", () => {
+    const r = sold({ demoEnded: true, confirmedByRole: "demo", demoReturnAt: new Date("2026-10-14T01:20:00Z") });
+    for (const s of [OWNER, DEMO]) {
+      const v = toAdminOrderView(r, s);
+      expect(v.status).toBe("demo_ended");
+      expect(v.statusLabel).toContain("เดโมสิ้นสุดแล้ว");
+      expect(v.actions).toEqual([]);
+    }
+    expect(toAdminOrderView(r, OWNER).demoReturnAtMs).toBe(new Date("2026-10-14T01:20:00Z").getTime());
+  });
+
+  it("แท็บ: demo_ended อยู่ในแท็บ 'ปิดแล้ว' เท่านั้น ไม่นับใน ยืนยันแล้ว/จัดส่งแล้ว/เสร็จสิ้น", () => {
+    const tabsOf = (s: "demo_ended" | "confirmed") => ADMIN_TABS.filter((t) => t.statuses?.includes(s)).map((t) => t.key);
+    expect(tabsOf("demo_ended")).toEqual(["closed"]);
+    expect(tabsOf("confirmed")).toEqual(["confirmed"]);
+    expect(STATUS_PRIORITY.demo_ended).toBe(STATUS_PRIORITY.rejected);
+  });
+
+  it("return: owner เห็นปุ่มทั้งกับ confirmed/shipped/completed (รวมออเดอร์ที่ demo ยืนยันในช่วงถือ); demo ไม่เห็นแม้เป็นออเดอร์ตัวเอง", () => {
+    for (const status of ["confirmed", "shipped", "completed"] as const) {
+      const r = row({ status, deliveryMethod: "post", slipPath: null, demoSessionId: SID, confirmedByRole: "demo", demoReturnAt: new Date() });
+      expect(toAdminOrderView(r, OWNER).actions).toContain("return");
+      expect(toAdminOrderView(r, DEMO).actions).not.toContain("return");
+    }
+    // ก่อนยืนยันไม่มี return
+    expect(toAdminOrderView(row(), OWNER).actions).not.toContain("return");
+  });
+
+  it("demo ที่ยืนยันเอง: ยังเดินต่อ ship/complete ได้ในช่วงถือ (ไม่มี return)", () => {
+    const own = toAdminOrderView(sold({ demoSessionId: SID, confirmedByRole: "demo", demoReturnAt: new Date() }), DEMO);
+    expect(own.actions).toEqual(["complete"]);
+  });
+
+  it("zod: return ต้องมีเหตุผล", () => {
+    const id = "11111111-1111-4111-8111-111111111111";
+    expect(adminTransitionSchema.safeParse({ orderId: id, intent: "return" }).success).toBe(false);
+    expect(adminTransitionSchema.safeParse({ orderId: id, intent: "return", reason: "  " }).success).toBe(false);
+    expect(adminTransitionSchema.safeParse({ orderId: id, intent: "return", reason: "ลูกค้าขอคืน" }).success).toBe(true);
+  });
+
+  it("timeline: แสดงเหตุผลของ return", () => {
+    const t = buildAdminTimeline([
+      { type: "return", actor: "admin", meta: { reason: "ขอคืน", adminRole: "owner" }, createdAtMs: 1 },
+    ]);
+    expect(t[0].label).toBe("คืนสินค้าเข้าร้าน/ยกเลิกออเดอร์");
+    expect(t[0].detail).toBe("เหตุผล: ขอคืน · โดย เจ้าของร้าน");
+  });
+});
+
 describe("availableActions (อิง transition())", () => {
   const cases: [OrderStatus, "pickup" | "post", string[]][] = [
     ["awaiting_review", "post", ["confirm", "reject"]],
     ["awaiting_review", "pickup", ["confirm", "reject"]],
-    ["confirmed", "post", ["ship"]],
-    ["confirmed", "pickup", ["complete"]],
-    ["shipped", "post", ["complete"]],
+    ["confirmed", "post", ["ship", "return"]],
+    ["confirmed", "pickup", ["complete", "return"]],
+    ["shipped", "post", ["complete", "return"]],
     ["pending_payment", "post", []],
-    ["completed", "post", []],
+    ["completed", "post", ["return"]],
     ["rejected", "post", []],
     ["expired", "pickup", []],
     ["cancelled", "pickup", []],

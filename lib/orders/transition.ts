@@ -12,7 +12,9 @@ export type OrderEventType =
   | "confirm"
   | "reject"
   | "ship"
-  | "complete";
+  | "complete"
+  /** owner คืนสินค้าเข้าร้าน/ยกเลิกออเดอร์ที่ยืนยันแล้ว (confirmed/shipped/completed → cancelled) */
+  | "return";
 
 export type Actor = "customer" | "admin" | "system";
 
@@ -25,7 +27,7 @@ export type TransitionOrder = {
 export type TransitionEvent = {
   type: OrderEventType;
   now: Date;
-  reason?: string; // reject
+  reason?: string; // reject, return
   trackingNo?: string; // ship
 };
 
@@ -64,6 +66,7 @@ const ACTOR: Record<OrderEventType, Actor> = {
   reject: "admin",
   ship: "admin",
   complete: "admin",
+  return: "admin",
 };
 
 function itemStatusFor(to: OrderStatus): ItemStatus {
@@ -151,6 +154,18 @@ export function transition(
       if (!trackingNo) return { ok: false, error: "tracking_required" };
       meta.trackingNo = trackingNo;
       to = "shipped";
+      break;
+    }
+
+    case "return": {
+      // ผู้เรียกต้องจำกัดสิทธิ์ให้ owner เท่านั้น (transition() ไม่รู้จัก role) — สถานะที่ขายแล้วทั้งสามคืนของได้
+      if (status !== "confirmed" && status !== "shipped" && status !== "completed") {
+        return { ok: false, error: "invalid_transition" };
+      }
+      const reason = event.reason?.trim();
+      if (!reason) return { ok: false, error: "reason_required" };
+      meta.reason = reason;
+      to = "cancelled";
       break;
     }
 

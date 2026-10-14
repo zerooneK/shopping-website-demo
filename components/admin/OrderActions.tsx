@@ -107,6 +107,28 @@ export function OrderActions({ orderId, actions }: { orderId: string; actions: A
               </button>
             </form>
           ) : null}
+
+          {actions.includes("return") ? (
+            <form action={formAction} className="space-y-3 border-t border-rule pt-6" data-testid="return-form">
+              {hidden("return")}
+              <div>
+                <label htmlFor="return-reason" className="block text-sm text-muted">
+                  คืนสินค้าเข้าร้าน / ยกเลิกออเดอร์ — เหตุผล (ลูกค้าจะเห็นข้อความนี้ สินค้าจะกลับมาว่างทันที)
+                </label>
+                <textarea
+                  id="return-reason"
+                  name="reason"
+                  required
+                  maxLength={300}
+                  rows={3}
+                  className={fieldCls}
+                />
+              </div>
+              <button type="submit" disabled={pending} className={secondaryBtn}>
+                คืนสินค้าเข้าร้าน
+              </button>
+            </form>
+          ) : null}
         </div>
       )}
     </section>

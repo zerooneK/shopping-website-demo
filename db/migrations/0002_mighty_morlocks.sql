@@ -1,0 +1,2 @@
+ALTER TABLE "orders" ADD COLUMN "confirmed_by_role" text;--> statement-breakpoint
+ALTER TABLE "orders" ADD CONSTRAINT "orders_confirmed_by_role_check" CHECK ("orders"."confirmed_by_role" IS NULL OR "orders"."confirmed_by_role" IN ('owner', 'demo'));
