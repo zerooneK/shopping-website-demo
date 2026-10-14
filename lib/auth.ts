@@ -126,11 +126,15 @@ export type Permission =
   | "pii.read"
   /** ดูสลิปของทุกออเดอร์ (demo ดูได้เฉพาะของ browser ตัวเอง) */
   | "slip.read_all"
-  /** แก้ข้อความ/ราคาสินค้า (ขั้น 3c-2) */
+  /**
+   * แก้ข้อความ/ราคา/สถานะสินค้า และเพิ่มสินค้า (ขั้น 3c-2) — owner เท่านั้น
+   * demo ดูอย่างเดียว: ใครก็กดปุ่มเดโมได้ และสินค้าเป็นเนื้อหาสาธารณะที่ทุกคนเห็น การให้คนแปลกหน้าแก้ชื่อ/ราคา/ซ่อนสินค้า
+   * ทำให้หน้าร้านถูกทำลายได้ (ข้อความหยาบ ราคา 1 บาท ซ่อนทั้งร้าน) จนกว่ารีเซ็ตรายวัน — เลือกแบบปลอดภัยกว่า SPEC §7 เดิม
+   */
   | "item.edit"
-  /** อัปโหลด/ลบรูปสินค้า (ขั้น 3c-2) */
+  /** อัปโหลด/ลบรูปสินค้า (ขั้น 3c-2) — owner เท่านั้น */
   | "image.upload"
-  /** ลบสินค้า (ขั้น 3c-2) */
+  /** ลบสินค้า (ขั้น 3c-2) — owner เท่านั้น */
   | "item.delete";
 
 const OWNER_PERMISSIONS: ReadonlySet<Permission> = new Set([
@@ -141,7 +145,7 @@ const OWNER_PERMISSIONS: ReadonlySet<Permission> = new Set([
   "image.upload",
   "item.delete",
 ]);
-const DEMO_PERMISSIONS: ReadonlySet<Permission> = new Set(["order.transition", "item.edit"]);
+const DEMO_PERMISSIONS: ReadonlySet<Permission> = new Set(["order.transition"]);
 
 export function can(session: AdminSession | null, permission: Permission): boolean {
   if (!session) return false;

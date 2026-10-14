@@ -27,6 +27,13 @@ export default async function AdminProtectedLayout({ children }: LayoutProps<"/a
             <Link href="/admin" className="tap meta meta-th inline-flex items-center text-ink">
               หลังบ้าน · ออเดอร์
             </Link>
+            <Link
+              href="/admin/items"
+              className="tap meta meta-th inline-flex items-center text-ink"
+              data-testid="nav-items"
+            >
+              สินค้า
+            </Link>
             <span
               className={`meta meta-th border px-2 py-0.5 ${
                 session.role === "owner" ? "border-ink text-ink" : "border-accent text-accent"

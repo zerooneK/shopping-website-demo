@@ -34,7 +34,7 @@
 | Database | Neon Postgres (ผ่าน Vercel Marketplace) | แผนฟรีตื่นจากโหมดหลับเร็ว ไม่ถูกพักโปรเจกต์แบบ Supabase |
 | ORM | Drizzle ORM + `@neondatabase/serverless` | เบา และเขียน type-safe ได้ |
 | Validation | Zod | ใช้ schema เดียวกันทั้งฝั่ง client และ server |
-| File storage | Vercel Blob | เก็บสลิป และรูปสินค้าที่อัปโหลดจากหลังบ้าน |
+| File storage | Vercel Blob (store แบบ **private**) | เก็บสลิป (`slips/`) และรูปสินค้าที่อัปโหลดจากหลังบ้าน (`items/`) — access เป็นคุณสมบัติของ store ไม่ใช่รายไฟล์ รูปสินค้าจึงเสิร์ฟสาธารณะผ่าน proxy `/api/item-images/<ไฟล์>` (อ่านได้เฉพาะ `items/`) |
 | QR | `promptpay-qr` + `qrcode` | สร้าง QR ฝั่งเซิร์ฟเวอร์ |
 | Admin session | Cookie ที่เซ็นด้วย `jose` (HS256), httpOnly | ไม่ต้องใช้ระบบ auth เต็มรูปแบบ |
 | รูปสินค้าเดโม | Unsplash (`images.unsplash.com`) พร้อมเครดิตช่างภาพ | |
@@ -76,8 +76,8 @@ DEMO_MODE=true
 | `/admin/login` | เข้าสู่ระบบ | ช่องรหัสผ่าน + ปุ่ม **"ลองหลังบ้านแบบเดโม"** |
 | `/admin` | Dashboard ออเดอร์ | แท็บตามสถานะ เรียงจากออเดอร์ที่ต้องจัดการก่อน (มีสลิปรอตรวจขึ้นบนสุด) |
 | `/admin/orders/[id]` | รายละเอียดออเดอร์ | ดูสลิปผ่าน proxy, ปุ่ม ยืนยัน / ปฏิเสธ (ใส่เหตุผล) / จัดส่งแล้ว (ใส่เลขพัสดุ) / ปิดงาน |
-| `/admin/items` | รายการสินค้า | ตาราง + เปลี่ยนสถานะเร็ว |
-| `/admin/items/new`, `/admin/items/[id]` | เพิ่ม/แก้สินค้า | ฟอร์มสินค้า, อัปโหลดรูป (owner เท่านั้น), เรียงลำดับรูป |
+| `/admin/items` | รายการสินค้า | ตาราง + เปลี่ยนสถานะเร็ว (ว่าง/ซ่อน/ขายแล้ว) — สินค้าที่ **มีออเดอร์ถืออยู่** เปลี่ยนสถานะไม่ได้ (ต้องยืนยัน/ปฏิเสธออเดอร์ก่อน) |
+| `/admin/items/new`, `/admin/items/[id]` | เพิ่ม/แก้สินค้า | ฟอร์มสินค้า (รหัส A###, ราคาเป็นจำนวนเต็ม > 0, ตำหนิห้ามว่าง), อัปโหลดรูป (owner เท่านั้น), เรียงลำดับรูป + alt, ลบสินค้า (owner เท่านั้น และลบไม่ได้ถ้ามีประวัติออเดอร์) |
 
 ---
 
@@ -188,11 +188,11 @@ pending_payment ──อัปสลิป──▶ awaiting_review ──ย�
 | สลิปตัวอย่าง | มีปุ่ม "ใช้สลิปตัวอย่าง" ที่ใช้รูปสลิปปลอมซึ่งอยู่ใน repo อยู่แล้ว เพื่อให้ลองครบ flow ได้โดยไม่ต้องอัปไฟล์ |
 | เวลาจอง | 15 นาที |
 | ลองหลังบ้าน | ปุ่ม "ลองหลังบ้านแบบเดโม" ให้ session role `demo` |
-| สิทธิ์ของ role `demo` | ยืนยัน/ปฏิเสธ/จัดส่งออเดอร์ได้, แก้ข้อความหรือราคาสินค้าได้ **แต่อัปโหลด/ลบรูปไม่ได้ ลบสินค้าไม่ได้** |
+| สิทธิ์ของ role `demo` | ยืนยัน/ปฏิเสธ/จัดส่งออเดอร์ได้ (เฉพาะออเดอร์ที่สร้างจาก browser ของตัวเอง) และ **ดูสินค้าได้อย่างเดียว** — แก้ข้อความ/ราคา/สถานะ เพิ่มสินค้า อัปโหลด/ลบรูป และลบสินค้าไม่ได้ (ตรวจที่ server ทุก action และ token ของ Blob upload) · *ปรับจากร่างแรกที่ให้ demo แก้ข้อความ/ราคาได้: สินค้าเป็นเนื้อหาสาธารณะที่ใครก็กดปุ่มเดโมได้ การให้คนแปลกหน้าแก้ชื่อ/ราคา/ซ่อนสินค้าทำลายหน้าร้านได้จนกว่าจะรีเซ็ต* |
 | ความเป็นส่วนตัวใน role `demo` | ชื่อ/เบอร์/ที่อยู่ถูก mask (`ส*** 08x-xxx-xx12`) และ **สลิปถูกซ่อน** ยกเว้นออเดอร์ที่ `demoSessionId` ตรงกับ browser ของตัวเอง เพื่อกันไม่ให้คนแปลกหน้าเห็นข้อมูลหรือไฟล์ของกันและกัน |
 | สิทธิ์ของ role `owner` | เห็นทุกอย่าง |
 | Rate limit | 1 browser หรือ 1 IP มีออเดอร์ `pending_payment` ได้ไม่เกิน 2 รายการ และสร้างได้ไม่เกิน 5 ออเดอร์/ชม. (เช็กจาก DB) |
-| Daily reset | Vercel Cron วันละครั้ง → `GET /api/cron/reset` (ตรวจ `CRON_SECRET`) → ลบออเดอร์และสลิปทั้งหมด, seed สินค้าใหม่ตาม `db/seed.ts`, สุ่มให้ 2–3 ชิ้นเป็น SOLD เพื่อให้ร้านดูมีชีวิต |
+| Daily reset | Vercel Cron วันละครั้ง เวลา `0 20 * * *` UTC (= 03:00 เวลาไทย; แผน Hobby รันได้วันละครั้งเท่านั้น และ Vercel อาจเรียกที่นาทีใดก็ได้ภายในชั่วโมงนั้น) → `GET /api/cron/reset` (ตรวจ `Authorization: Bearer ${CRON_SECRET}` แบบ timing-safe, ไม่ตั้ง/สั้นกว่า 16 ตัวอักษร = ปฏิเสธทุกคำขอ) → ใน DB (transaction เดียว + advisory lock รอบซ้อนจะข้าม): ลบ `orders` + `order_events` ทั้งหมด (รวม `client_ip_hash`), คืนสินค้าทุกชิ้นเป็นข้อมูลใน `db/seed-data.json` (status available) และ **ลบสินค้านอก seed** (รวมที่เจ้าของเพิ่มเอง) แล้วสุ่ม 2–3 ชิ้นเป็น SOLD → ลบไฟล์ Blob ใต้ `slips/` ทั้งหมด (list+del เป็นหน้าๆ เฉพาะไฟล์ที่อัปโหลดก่อนเริ่มรีเซ็ต; **ไม่ลบ `items/`**) → `revalidateTag("items", { expire: 0 })` · ไม่มี Blob token (dev) = ข้ามส่วน Blob พร้อม log |
 
 ---
 
@@ -247,7 +247,8 @@ pending_payment ──อัปสลิป──▶ awaiting_review ──ย�
 - Admin cookie เป็น `httpOnly; Secure; SameSite=Lax` อายุ 7 วัน, Server Actions/API ฝั่ง admin ตรวจ session **ทุกครั้งที่ฝั่ง server** (ไม่พึ่ง middleware อย่างเดียว) และเทียบรหัสแบบ constant-time + จำกัดการลองรหัส
 - สลิปไม่มี URL สาธารณะ และ endpoint ที่ออก Blob upload token ตรวจ content-type, ขนาด และสถานะออเดอร์
 - ไม่ log PII (ชื่อ เบอร์ ที่อยู่)
-- `/api/cron/reset` ตรวจ `Authorization: Bearer ${CRON_SECRET}`
+- `/api/cron/reset` ตรวจ `Authorization: Bearer ${CRON_SECRET}` แบบ timing-safe และ fail-closed (ไม่มี `CRON_SECRET` = ปฏิเสธทั้งหมด)
+- รูปสินค้า: endpoint ออก Blob token (`/api/admin/item-images/upload`) ตรวจ Origin + session + สิทธิ์ `image.upload` (owner) ก่อนทุกครั้ง, pathname ต้องเป็น `items/<ไฟล์รูป>` เท่านั้น, ชนิด jpeg/png/webp ≤ 5MB; proxy สาธารณะ `/api/item-images/<ไฟล์>` อ่านได้เฉพาะ `items/` และตัดสินชนิดจากเนื้อไฟล์
 - ตั้ง security headers พื้นฐาน (CSP แบบที่อนุญาต unsplash และ blob, `X-Content-Type-Options`, `Referrer-Policy`)
 - มีหน้าแจ้งความเป็นส่วนตัวสั้น ๆ (PDPA-style) แม้จะเป็นเดโม
 
@@ -260,14 +261,15 @@ shop-website/
   app/
     (shop)/page.tsx, item/[code]/, checkout/[code]/, order/[token]/, about/
     admin/login/, admin/(protected)/...
-    api/orders/, api/orders/[token]/slip/, api/blob/upload/, api/admin/slips/[orderId]/, api/cron/reset/
+    api/orders/, api/orders/[token]/slip/, api/blob/upload/, api/admin/slips/[orderId]/, api/cron/reset/,
+    api/admin/item-images/upload/ (token อัปโหลดรูปสินค้า), api/item-images/[name]/ (proxy รูปสินค้า)
   components/      ui/, shop/, admin/
   db/              schema.ts, client.ts, seed.ts, seed-data.json
   lib/             orders/transition.ts, reserve.ts, auth.ts, promptpay.ts, demo.ts, validation.ts
   public/demo/     sample-slip.png
   tests/           unit/, e2e/
   docs/            BUILD_LOG.md
-  SPEC.md, README.md, vercel.json (cron)
+  SPEC.md, README.md, vercel.json (cron `0 20 * * *` UTC)
 ```
 
 ---

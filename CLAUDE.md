@@ -52,8 +52,8 @@
 - **Windows/shell:** connection string มี `&` ใช้ `source .env` ไม่ได้ ให้โหลดผ่าน `node --env-file=.env.local`
 
 ## สถานะ (อัปเดตเมื่อจบแต่ละขั้น)
-เสร็จ: 2 (สเปค), 3a, 3b-1, 3b-2, 4 · ถัดไป: **3c** (หลังบ้าน auth owner/demo, หน้าตรวจออเดอร์, จัดการสินค้า, cron รีเซ็ต+ลบ blob) แล้ว **5** (รีวิวรวม + deploy)
-**เงื่อนไขบังคับก่อน deploy:** รีเซ็ตรายวัน + หลังบ้าน reject (กันล็อกสินค้า), `SESSION_SECRET` ใน Vercel ทั้ง Production/Preview, Blob store + `BLOB_READ_WRITE_TOKEN` + ทดสอบอัปไฟล์จริง, คืนข้อความ "รีเซ็ตทุกวัน" ใน แถบเดโม/about/privacy, ตรวจ checklist ท้าย `docs/BUILD_LOG.md`
+เสร็จ: 2 (สเปค), 3a, 3b-1, 3b-2, 3c-1, 3c-2, 4 · ถัดไป: **5** (รีวิวรวม + deploy)
+**เงื่อนไขบังคับก่อน deploy:** (รีเซ็ตรายวัน + reject หลังบ้าน ทำแล้วใน 3c) ตั้ง `ADMIN_PASSWORD`(≥16) `CRON_SECRET`(≥16) `BLOB_READ_WRITE_TOKEN` (private store) และ ตรวจ log cron รอบแรก, `SESSION_SECRET` ใน Vercel ทั้ง Production/Preview, Blob store + `BLOB_READ_WRITE_TOKEN` + ทดสอบอัปไฟล์จริง, คืนข้อความ "รีเซ็ตทุกวัน" ใน แถบเดโม/about/privacy, ตรวจ checklist ท้าย `docs/BUILD_LOG.md`
 
 ## รูปแบบ `docs/BUILD_LOG.md`
 เพิ่มต่อท้ายเสมอ ห้ามแก้รายการเก่า:

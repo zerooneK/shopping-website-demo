@@ -26,11 +26,10 @@ test.describe("flow สั่งซื้อ (375x812)", () => {
     // ---- หน้าแรก: ช่องค้นหาเหลือช่องเดียว + เห็นแถบหมวดและส่วนบนของสินค้าชิ้นแรกในจอแรก
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    // แถบเดโมต้องไม่อ้างสิ่งที่ระบบยังไม่ทำ (ยังไม่มี cron รีเซ็ต) — ข้อความจริงเท่านั้น
+    // แถบเดโม (ขั้น 3c-2): มี cron รีเซ็ตรายวันจริงแล้ว จึงคืนข้อความ "ข้อมูลรีเซ็ตทุกวัน" (SPEC §7)
     await expect(
-      page.getByText("Demo store — ไม่มีการเรียกเก็บเงินจริง · อย่ากรอกข้อมูลจริง", { exact: true }),
+      page.getByText("Demo store — ไม่มีการเรียกเก็บเงินจริง · ข้อมูลรีเซ็ตทุกวัน · อย่ากรอกข้อมูลจริง", { exact: true }),
     ).toBeVisible();
-    await expect(page.getByText("รีเซ็ตทุกวัน")).toHaveCount(0);
     const visibleSearch = page.locator('input[type="search"]:visible');
     await expect(visibleSearch).toHaveCount(1);
     const nav = page.getByRole("navigation", { name: "หมวดสินค้า" });
@@ -310,26 +309,32 @@ test.describe("API (ผ่าน request context ที่มี cookie jar ข�
 });
 
 test.describe("ถ้อยคำสอดคล้องกับสิ่งที่ระบบทำจริง", () => {
-  test("/about และ /privacy ไม่อ้างการรีเซ็ตรายวัน และบอกสถานะหลังบ้านตรงความจริง", async ({ page }) => {
+  test("/about และ /privacy บอกการรีเซ็ตรายวัน (ตี 3 เวลาไทย) และสิทธิ์ของหลังบ้านตรงความจริง", async ({ page }) => {
     await page.goto("/about");
     // เฉพาะส่วนคำอธิบาย (ไม่รวมไทม์ไลน์ที่ดึงจาก BUILD_LOG ซึ่งอาจเอ่ยถึงถ้อยคำเหล่านี้ตอนบันทึกการแก้)
     const about =
       (await page.locator("main > p").nth(1).innerText()) +
       "\n" +
       (await page.locator('section[aria-labelledby="why-demo"]').innerText());
-    expect(about).not.toContain("ถูกรีเซ็ตเป็นรายวัน");
-    expect(about).not.toContain("ทำงานครบทุกขั้น");
-    expect(about).toContain("ยังอยู่ระหว่างพัฒนา");
+    expect(about).toContain("ข้อมูลรีเซ็ตทุกวัน");
+    expect(about).toContain("ตี 3 เวลาไทย");
+    expect(about).not.toContain("ยังอยู่ระหว่างพัฒนา");
+    expect(about).toContain("ส่วนจัดการสินค้า");
+    expect(about).toContain("บัญชีเดโมดูรายการสินค้าได้อย่างเดียว");
 
     await page.goto("/privacy");
     const privacy = await page.locator("main").innerText();
-    expect(privacy).not.toContain("รีเซ็ตทุกวัน");
-    expect(privacy).toContain("ยังไม่มีระบบล้างอัตโนมัติ");
+    expect(privacy).toContain("ข้อมูลรีเซ็ตทุกวัน");
+    expect(privacy).toContain("ตี 3 เวลาไทย");
+    expect(privacy).toContain("ค่า hash ของ IP ทั้งหมด");
+    expect(privacy).toContain("ไฟล์สลิปจะถูกลบภายใน 1–2 วัน");
+    expect(privacy).not.toContain("ไฟล์สลิปทั้งหมด");
+    expect(privacy).not.toContain("ยังไม่มีระบบล้างอัตโนมัติ");
     // หลังบ้านเปิดแล้ว (ขั้น 3c-1): ข้อความต้องไม่บอกว่า "ยังไม่มีหลังบ้าน" และต้องบอกพฤติกรรมของ role เดโมที่ทำจริง
     expect(privacy).not.toContain("ยังไม่มีหลังบ้านเปิดใช้งาน");
     expect(privacy).toContain("เปิดดูสลิปได้เฉพาะออเดอร์ที่สร้างจากเบราว์เซอร์ของตัวเอง");
     expect(about).not.toContain("หลังบ้านยังไม่เปิดใช้");
-    // L2: ใช้คำว่า "ปิดบังบางส่วน" และบอกว่า demo เปลี่ยนสถานะ/เขียนเหตุผลได้เฉพาะออเดอร์ของตัวเอง; ไม่อ้างรีเซ็ตรายวัน
+    // L2: ใช้คำว่า "ปิดบังบางส่วน" และบอกว่า demo เปลี่ยนสถานะ/เขียนเหตุผลได้เฉพาะออเดอร์ของตัวเอง
     expect(privacy).toContain("ปิดบังบางส่วน");
     expect(privacy).toContain("เปลี่ยนสถานะออเดอร์");
     expect(privacy).toContain("เฉพาะออเดอร์ที่ตัวเองสร้างจากเบราว์เซอร์นั้น");

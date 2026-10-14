@@ -173,9 +173,9 @@ describe("สิทธิ์ตาม role (SPEC §7)", () => {
     }
   });
 
-  it("demo: เปลี่ยนสถานะออเดอร์/แก้สินค้าได้ แต่ไม่เห็น PII, ไม่ลบสินค้า, ไม่อัปโหลดรูป, ไม่ดูสลิปทุกใบ", () => {
+  it("demo: เปลี่ยนสถานะออเดอร์ได้ แต่ดูสินค้าได้อย่างเดียว (ไม่แก้/ไม่ลบ/ไม่อัปโหลดรูป) ไม่เห็น PII ไม่ดูสลิปทุกใบ", () => {
     expect(can(demo, "order.transition")).toBe(true);
-    expect(can(demo, "item.edit")).toBe(true);
+    expect(can(demo, "item.edit")).toBe(false);
     expect(can(demo, "pii.read")).toBe(false);
     expect(can(demo, "item.delete")).toBe(false);
     expect(can(demo, "image.upload")).toBe(false);

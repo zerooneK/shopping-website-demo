@@ -21,6 +21,8 @@ const PORT = 3100;
 process.env.E2E_SESSION_SECRET ??= randomBytes(32).toString("hex");
 /** รหัสเจ้าของร้านสำหรับ e2e เท่านั้น: สุ่มต่อการรัน ไม่เขียนลงดิสก์ ไม่ใช้ ADMIN_PASSWORD จริงใน .env.local */
 process.env.E2E_ADMIN_PASSWORD ??= randomBytes(18).toString("base64url");
+/** CRON_SECRET สุ่มต่อการรัน: เทสต์ยิง /api/cron/reset ด้วยค่าผิด/ไม่มี header เท่านั้น (ห้ามยิงด้วยค่าถูก — มันล้างทั้งตาราง orders ของ Neon จริง) */
+process.env.E2E_CRON_SECRET ??= randomBytes(24).toString("base64url");
 const E2E_SESSION_SECRET = process.env.E2E_SESSION_SECRET;
 const E2E_ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD;
 
@@ -58,6 +60,7 @@ export default defineConfig({
       PORT: String(PORT),
       SESSION_SECRET: E2E_SESSION_SECRET,
       ADMIN_PASSWORD: E2E_ADMIN_PASSWORD,
+      CRON_SECRET: process.env.E2E_CRON_SECRET,
       DEMO_MODE: "true",
     },
   },

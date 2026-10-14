@@ -35,11 +35,16 @@ export const E2E_CODES = {
   demoOther: "V005",
   /** demo ปฏิเสธออเดอร์ของตัวเอง (ตรวจป้ายข้อความจากผู้ลองเดโมฝั่งลูกค้า) */
   demoOwnReject: "V006",
+  /** จัดการสินค้า (admin-items.spec.ts) — แก้ราคา / เปลี่ยนสถานะเร็ว / สินค้าที่ออเดอร์ถือ / demo ดูอย่างเดียว */
+  itemEdit: "V007",
+  itemStatus: "V008",
+  itemHeld: "V009",
+  itemDemo: "V010",
 } as const;
 
 const ALL_CODES = [
   ...Array.from({ length: 11 }, (_, i) => `T${981 + i}`),
-  ...Array.from({ length: 6 }, (_, i) => `V${String(i + 1).padStart(3, "0")}`),
+  ...Array.from({ length: 10 }, (_, i) => `V${String(i + 1).padStart(3, "0")}`),
 ];
 
 function sampleImages(): ItemImage[] {
@@ -112,6 +117,10 @@ export async function createFixtures() {
       { ...base, code: E2E_CODES.demoOwn, title: "ของทดสอบ e2e เดโม ของตัวเอง", price: 440, sortOrder: 93 },
       { ...base, code: E2E_CODES.demoOther, title: "ของทดสอบ e2e เดโม ของคนอื่น", price: 450, sortOrder: 94 },
       { ...base, code: E2E_CODES.demoOwnReject, title: "ของทดสอบ e2e เดโม ปฏิเสธเอง", price: 460, sortOrder: 95 },
+      { ...base, code: E2E_CODES.itemEdit, title: "ของทดสอบ e2e แก้ราคา", price: 480, sortOrder: 96 },
+      { ...base, code: E2E_CODES.itemStatus, title: "ของทดสอบ e2e เปลี่ยนสถานะ", price: 490, sortOrder: 97 },
+      { ...base, code: E2E_CODES.itemHeld, title: "ของทดสอบ e2e ออเดอร์ถือ", price: 500, sortOrder: 98 },
+      { ...base, code: E2E_CODES.itemDemo, title: "ของทดสอบ e2e เดโมดูสินค้า", price: 510, sortOrder: 99 },
     ]);
 }
 

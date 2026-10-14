@@ -1,39 +1,19 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { z } from "zod";
 import { getDb } from "./client";
+import { parseSeedItems, type SeedItem } from "./seed-schema";
 import { orderEvents, orders, items } from "./schema";
 
-const seedItemSchema = z.object({
-  code: z.string().regex(/^[A-Z]\d{3}$/),
-  title: z.string().min(1),
-  description: z.string().min(1),
-  flaws: z.string().min(1, "ตำหนิห้ามว่าง"),
-  condition: z.enum(["like_new", "good", "fair"]),
-  category: z.enum(["fashion", "books", "home", "tech", "other"]),
-  price: z.number().int().positive(),
-  images: z
-    .array(
-      z.object({
-        url: z.string().url(),
-        alt: z.string().min(1),
-        credit: z.object({ name: z.string(), url: z.string().url() }).optional(),
-      }),
-    )
-    .min(1),
-  sortOrder: z.number().int().default(0),
-});
-
-export type SeedItem = z.infer<typeof seedItemSchema>;
+export type { SeedItem };
 
 export function loadSeedItems(
   path = resolve(process.cwd(), "db", "seed-data.json"),
 ): SeedItem[] {
   const raw: unknown = JSON.parse(readFileSync(path, "utf8"));
-  return z.array(seedItemSchema).parse(raw);
+  return parseSeedItems(raw);
 }
 
-/** ล้างออเดอร์และสินค้าทั้งหมด แล้ว seed ใหม่ (ใช้ซ้ำใน cron reset ภายหลัง) */
+/** ล้างออเดอร์และสินค้าทั้งหมด แล้ว seed ใหม่ (ใช้เฉพาะ dev: npm run db:seed — cron รายวันใช้ lib/cron/reset.ts ที่มี advisory lock) */
 export async function seedDatabase(seedItems = loadSeedItems()) {
   const db = getDb();
   await db.transaction(async (tx) => {
