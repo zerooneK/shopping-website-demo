@@ -108,7 +108,7 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/item-images
       "Content-Length": String(bytes.byteLength),
       "X-Content-Type-Options": "nosniff",
       ...cacheHeaders,
-      "Content-Security-Policy": "default-src 'none'; sandbox",
+      "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'; sandbox",
       "Content-Disposition": "inline",
     },
   });

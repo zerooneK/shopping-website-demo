@@ -91,3 +91,77 @@ export function splitInlineCode(text: string): { code: boolean; text: string }[]
         : { code: false, text: s },
     );
 }
+
+/**
+ * ตัวเลขสรุปที่ "นับได้จริง" จากหัวข้อรายการใน BUILD_LOG (ใช้ในหน้า /about) — ไม่มีการประมาณ ไม่มีเงิน/เวลา
+ * เพราะ BUILD_LOG ไม่ได้บันทึกต้นทุนโทเค็น ค่าใช้จ่าย หรือชั่วโมงทำงานไว้
+ *
+ * ข้อจำกัดที่ต้องบอกผู้อ่าน: นับเฉพาะสิ่งที่ปรากฏ "ในหัวข้อรายการ" (agent/โมเดล/effort/ชื่อขั้น) —
+ * รอบรีวิวที่เล่าไว้เฉพาะในเนื้อของรายการอื่นไม่ถูกนับ ตัวเลขจึงเป็นค่าขั้นต่ำ
+ */
+export type BuildLogSummary = {
+  /** จำนวนรายการในบันทึก */
+  entryCount: number;
+  /** จำนวนขั้นตาม SPEC §11 (2, 3a, 3b, 3c, 4, 5 — ขั้นย่อย 3b-1, 4b, 5-fix ฯลฯ นับรวมในขั้นแม่) */
+  stageCount: number;
+  firstDate: string | null;
+  lastDate: string | null;
+  /** จำนวนวันที่ต่างกันที่มีบันทึก (ไม่ใช่จำนวนชั่วโมง) */
+  daysWithEntries: number;
+  /** รายการแก้ไขหลังรีวิว (ชื่อขั้นลงท้าย -fix, -fix2 ฯลฯ) */
+  fixEntryCount: number;
+  /** รายการที่ Reviewer เป็นผู้ทำในหัวข้อ */
+  reviewerEntryCount: number;
+  /** จำนวนรอบรีวิวที่นับจาก effort ต่อรอบในหัวข้อ เช่น "medium → low → low" = 3 รอบ */
+  reviewerRounds: number;
+  /** รายการที่ effort ถูกขยับขึ้นเป็น high/xhigh ตามกฎของทีม */
+  effortRaisedCount: number;
+  /** รายการที่ส่งงานของ Builder ให้ Opus แทน (กฎข้อ 3) */
+  opusBuilderCount: number;
+};
+
+/** รหัสขั้นตาม SPEC §11: "3b-2-fix2" → "3b", "4b" → "4", "5-fix (…)" → "5" */
+export function stageKey(step: string): string | null {
+  const m = step.trim().match(/^(3[a-z]|\d+)/i);
+  return m ? m[1].toLowerCase() : null;
+}
+
+export function summarizeBuildLog(entries: BuildLogEntry[]): BuildLogSummary {
+  const stages = new Set<string>();
+  const days = new Set<string>();
+  let fix = 0;
+  let reviewerEntries = 0;
+  let reviewerRounds = 0;
+  let raised = 0;
+  let opusBuilder = 0;
+
+  for (const e of entries) {
+    const key = stageKey(e.step);
+    if (key) stages.add(key);
+    days.add(e.date);
+    if (/-fix\d*(\s|$)/i.test(e.step)) fix++;
+    if (/reviewer/i.test(e.agent)) {
+      reviewerEntries++;
+      // วงเล็บของ reviewer: "(opus · medium → low → low)" → จำนวนรอบ = จำนวนค่า effort ที่คั่นด้วย →
+      const paren = e.agent.match(/reviewer[^()]*\(([^()]*)\)/i);
+      const effortPart = paren?.[1].split("·")[1];
+      reviewerRounds += effortPart ? effortPart.split("→").filter((s) => s.trim()).length : 1;
+    }
+    if (/·\s*(?:[a-z]+\s*→\s*)*x?high\b/i.test(e.agent)) raised++;
+    if (/shop-builder\s*\(\s*opus/i.test(e.agent)) opusBuilder++;
+  }
+
+  const sorted = [...days].sort();
+  return {
+    entryCount: entries.length,
+    stageCount: stages.size,
+    firstDate: sorted[0] ?? null,
+    lastDate: sorted[sorted.length - 1] ?? null,
+    daysWithEntries: days.size,
+    fixEntryCount: fix,
+    reviewerEntryCount: reviewerEntries,
+    reviewerRounds,
+    effortRaisedCount: raised,
+    opusBuilderCount: opusBuilder,
+  };
+}

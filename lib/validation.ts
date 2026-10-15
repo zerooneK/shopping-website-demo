@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+/**
+ * ปิด JIT ของ Zod 4 (ใช้ new Function ประกอบ parser) — ไฟล์นี้ถูกรวมใน bundle ฝั่ง client (CheckoutForm) และ CSP ของเว็บไม่อนุญาต
+ * 'unsafe-eval' (next.config.ts) ถ้าเปิดไว้ Zod จะลอง new Function ตอนสร้าง schema แล้วถูกบล็อกพร้อมรายงาน securitypolicyviolation
+ * ทุกครั้งที่เปิดหน้า checkout (จับได้จาก e2e security-headers.spec.ts) — jitless ให้ผล validate เท่าเดิม แค่ไม่คอมไพล์ parser
+ * ต้องเรียกก่อนสร้าง schema ใดๆ ในไฟล์นี้
+ */
+z.config({ jitless: true });
+
 export const SHIPPING_FEE_POST = 50;
 
 export const deliveryMethodSchema = z.enum(["pickup", "post"]);

@@ -77,3 +77,13 @@ describe("promptpay demo QR", () => {
     expect(await buildDemoQrDataUrl(500)).toMatch(/^data:image\/png;base64,/);
   });
 });
+
+describe("Zod ต้องไม่ใช้ eval (CSP ไม่อนุญาต 'unsafe-eval')", () => {
+  it("lib/validation ตั้ง jitless — ไม่งั้น Zod ลอง new Function แล้วถูก CSP รายงาน violation ทุกครั้งที่เปิดหน้า checkout", async () => {
+    const { core } = await import("zod");
+    expect(core.globalConfig.jitless).toBe(true);
+    // ยัง validate ได้ตามเดิมเมื่อปิด JIT
+    expect(createOrderSchema.safeParse({ ...base }).success).toBe(true);
+    expect(createOrderSchema.safeParse({ ...base, phone: "123" }).success).toBe(false);
+  });
+});

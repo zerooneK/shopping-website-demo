@@ -95,6 +95,7 @@ describe("route /api/cron/reset", () => {
   beforeEach(() => {
     for (const m of Object.values(mocks)) m.mockReset();
     vi.stubEnv("CRON_SECRET", SECRET);
+    vi.stubEnv("DEMO_MODE", "true");
     vi.stubEnv("BLOB_READ_WRITE_TOKEN", "blob-token");
     mocks.resetDemoData.mockResolvedValue(RAN);
     mocks.list.mockResolvedValue({ blobs: [], hasMore: false });
@@ -151,6 +152,43 @@ describe("route /api/cron/reset", () => {
     expect(mocks.list).toHaveBeenCalledWith(expect.objectContaining({ prefix: "slips/" }));
     expect(mocks.del).toHaveBeenCalledWith(["slips/o1/slip-a.jpg"]);
     expect(res.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it.each([undefined, "", "false", "TRUE", "1", "yes"])(
+    "ไม่ใช่โหมดเดโม (DEMO_MODE=%j) → 200 skipped_not_demo ไม่แตะ DB/Blob/cache (ร้านจริงต้องไม่โดนล้างทุกวัน)",
+    async (mode) => {
+      vi.stubEnv("DEMO_MODE", mode);
+      const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+      for (const call of [() => GET(req("GET", `Bearer ${SECRET}`)), () => POST(req("POST", `Bearer ${SECRET}`))]) {
+        const res = await call();
+        expect(res.status).toBe(200);
+        expect(await res.json()).toEqual({ status: "skipped_not_demo" });
+        expect(res.headers.get("cache-control")).toBe("no-store");
+      }
+      expect(mocks.resetDemoData).not.toHaveBeenCalled();
+      expect(mocks.list).not.toHaveBeenCalled();
+      expect(mocks.del).not.toHaveBeenCalled();
+      expect(mocks.revalidateTag).not.toHaveBeenCalled();
+      expect(info).toHaveBeenCalledWith(expect.stringContaining("DEMO_MODE"));
+      info.mockRestore();
+    },
+  );
+
+  it("ปิดโหมดเดโมแล้วยังต้องผ่าน Bearer ก่อน: ไม่มี/ผิด secret = 401 (ไม่บอกว่าร้านอยู่โหมดไหน)", async () => {
+    vi.stubEnv("DEMO_MODE", "false");
+    const none = await GET(req("GET"));
+    const wrong = await GET(req("GET", "Bearer wrong-secret-value-xxxxxxxx"));
+    for (const res of [none, wrong]) {
+      expect(res.status).toBe(401);
+      expect(await res.json()).toEqual({ error: "unauthorized" });
+    }
+    expect(mocks.resetDemoData).not.toHaveBeenCalled();
+  });
+
+  it("DEMO_MODE=true → รีเซ็ตตามปกติ (ยืนยันว่า skipped_not_demo ไม่ได้ข้ามทุกกรณี)", async () => {
+    vi.stubEnv("DEMO_MODE", "true");
+    expect(await (await GET(req("GET", `Bearer ${SECRET}`))).json()).toMatchObject({ status: "ran" });
+    expect(mocks.resetDemoData).toHaveBeenCalledTimes(1);
   });
 
   it("POST ใช้ได้เหมือน GET", async () => {

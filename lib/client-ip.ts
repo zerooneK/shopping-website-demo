@@ -1,5 +1,6 @@
 import { createHmac } from "node:crypto";
 import { isIP } from "node:net";
+import { MIN_SECRET_LENGTH } from "./auth";
 
 /**
  * ระบุ IP ของผู้เรียก + hash ด้วย HMAC-SHA256 (ห้ามเก็บ/ log IP ดิบ) สำหรับ rate limit ตาม IP (SPEC §7)
@@ -34,14 +35,24 @@ export class IpHashKeyMissingError extends Error {
   }
 }
 
-/** true = มีกุญแจให้ hash (มี SESSION_SECRET หรือไม่ใช่ production ซึ่งใช้กุญแจสำรองได้) */
+/**
+ * SESSION_SECRET ที่ "ใช้ได้" — เกณฑ์เดียวกับกุญแจเซ็น session (getSessionKey ใน lib/auth.ts: ต้องยาวอย่างน้อย
+ * MIN_SECRET_LENGTH = 32 ตัวอักษร) ค่าที่ตั้งไว้แต่สั้นเกินไปถือว่า "ไม่ได้ตั้ง" ทั้งที่นี่และที่หลังบ้าน
+ * จะได้ไม่มีกรณีที่หลังบ้านปฏิเสธเพราะสั้น แต่ HMAC ของ IP ยังใช้กุญแจสั้นนั้นเงียบๆ
+ */
+function usableSecret(): string | null {
+  const secret = process.env.SESSION_SECRET;
+  return secret && secret.length >= MIN_SECRET_LENGTH ? secret : null;
+}
+
+/** true = มีกุญแจให้ hash (มี SESSION_SECRET ที่ยาวพอ หรือไม่ใช่ production ซึ่งใช้กุญแจสำรองได้) */
 export function isIpHashKeyConfigured(): boolean {
-  if (process.env.SESSION_SECRET) return true;
+  if (usableSecret()) return true;
   return process.env.NODE_ENV !== "production";
 }
 
 function hmacKey(): string {
-  const secret = process.env.SESSION_SECRET;
+  const secret = usableSecret();
   if (secret) return secret;
   if (process.env.NODE_ENV === "production") throw new IpHashKeyMissingError();
   return DEV_FALLBACK_KEY;

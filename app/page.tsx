@@ -15,11 +15,11 @@ export default function Home({ searchParams }: PageProps<"/">) {
         </h1>
         <div className="mt-4 grid gap-4 sm:mt-8 sm:gap-6 md:grid-cols-12">
           <p className="max-w-xl text-sm leading-6 text-muted sm:text-base sm:leading-8 md:col-span-6">
-            ของมือสองที่คัดมาทีละชิ้น ถ่ายรูปจริง บอกตำหนิตรงๆ ทุกชิ้น
-            เห็นรหัสในคลิปแล้วพิมพ์ค้นหาได้เลย สั่งได้ทีละชิ้น ชิ้นไหนมีคนจองแล้วก็จะบอกให้รู้
+            ร้านเดโมของมือสองที่แสดงทีละชิ้น บอกตำหนิตรงๆ ทุกชิ้น รูปประกอบจาก Unsplash (สินค้าและตำหนิเป็นข้อมูลตัวอย่าง)
+            ถ้ามีรหัสสินค้า พิมพ์ค้นหาได้เลย สั่งได้ทีละชิ้น ชิ้นไหนมีคนจองแล้วก็จะบอกให้รู้
           </p>
           <div className="md:col-span-4 md:col-start-9">
-            <p className="meta meta-th mb-2">รู้รหัสจากคลิป?</p>
+            <p className="meta meta-th mb-2">มีรหัสสินค้า?</p>
             {/* ช่องค้นหาของ hero ใช้เฉพาะมือถือ — จอ >=640px ใช้ช่องใน header (เหลือช่องเดียวต่อจอ) */}
             <SearchForm id="hero-search" className="sm:hidden" />
             <p className="mt-2 hidden text-sm text-muted sm:block">

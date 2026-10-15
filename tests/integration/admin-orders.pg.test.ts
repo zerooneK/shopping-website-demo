@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { vi, afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { items, orderEvents, orders } from "@/db/schema";
@@ -23,6 +23,9 @@ import type { CreateOrderInput } from "@/lib/validation";
  * ใช้รหัสสินค้า U801-U860 เท่านั้น (ไม่ชนกับเทสต์อื่น) ลบเฉพาะแถวของตัวเองก่อน/หลังรัน — ห้ามแตะ seed
  * รัน: npm run test:integration
  */
+// queries.ts เรียก connection() ของ Next (ใช้ได้เฉพาะใน request scope) — นอก Next ให้เป็น no-op เหมือน tests/integration/item-admin.pg.test.ts
+vi.mock("next/server", () => ({ connection: async () => undefined }));
+
 const HAS_DB = Boolean(process.env.DATABASE_URL);
 if (!HAS_DB) {
   console.warn("[integration] ข้ามเทสต์: ไม่พบ DATABASE_URL (รันผ่าน `npm run test:integration`)");

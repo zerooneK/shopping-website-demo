@@ -84,7 +84,8 @@ export default function PrivacyPage() {
           <Link href="/about" className="underline underline-offset-4">
             เกี่ยวกับโปรเจกต์
           </Link>{" "}
-          เพื่อให้ลบข้อมูลให้
+          เพื่อให้ลบข้อมูลให้ <strong>อย่าใส่ข้อมูลส่วนตัวใน issue</strong> (ระบุแค่รหัสสินค้าและเวลา)
+          ข้อมูลจะถูกลบเองในรอบรีเซ็ต
         </p>
         <Link
           href="/"

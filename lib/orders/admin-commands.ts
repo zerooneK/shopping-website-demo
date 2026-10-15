@@ -83,6 +83,33 @@ export async function adminTransition(
     return { ok: false, error: "owner_only" };
   }
   return db.transaction(async (tx) => {
+    // ล็อก "แถวออเดอร์ของตัวเอง" แล้วจึงล็อก "แถวสินค้า" ก่อนอ่านอะไรทั้งหมด (ทุกชนิดคำสั่ง)
+    //
+    // (1) ทำไมล็อกแถวสินค้า — แบบเดียวกับ lockAndRead ใน lib/admin/item-commands.ts: claimItem (จองใหม่) ก็ UPDATE แถวเดียวกันนี้
+    //     ถ้าไม่ล็อก ออเดอร์เดโมที่ครบ N นาทีพอดีจะทำให้ "return" อ่าน snapshot ว่ายังไม่สิ้นสุด แล้ว UPDATE items ... NOT EXISTS
+    //     ครั้งเดียวรอ lock ของ tx จองที่แทรกเข้ามา — พอ tx จอง commit Postgres ตรวจเงื่อนไขแถวซ้ำแต่ไม่ประเมิน subquery
+    //     NOT EXISTS ใหม่ จึงปล่อยสินค้าเป็น available ทั้งที่ออเดอร์ใหม่ถืออยู่ (ขายซ้ำ)
+    //
+    // (2) ทำไมออเดอร์ต้อง FOR NO KEY UPDATE ไม่ใช่ SELECT ธรรมดา — cron reset ทำ LOCK TABLE orders, items, order_events IN EXCLUSIVE MODE
+    //     (ตามลำดับนี้) EXCLUSIVE ไม่ชนกับ ACCESS SHARE ของ SELECT ธรรมดา: ถ้า admin ถือแค่ ACCESS SHARE บน orders + ROW SHARE บน items
+    //     cron จะได้ orders แล้วรอ items ขณะที่ admin จะ UPDATE orders (ROW EXCLUSIVE ชน EXCLUSIVE ของ cron) = deadlock (40P01)
+    //     SELECT ... FOR NO KEY UPDATE ได้ ROW SHARE บนตาราง orders ซึ่งชน EXCLUSIVE → cron ต้องไปรอที่ orders ตั้งแต่ต้น
+    //     (ไม่ถืออะไรอยู่) หรือถ้า cron มาก่อน admin ก็รอที่คำสั่งแรกนี้ — ไม่เกิดวงรอกัน; ใช้ NO KEY UPDATE (ไม่ใช่ UPDATE)
+    //     เพราะไม่แตะ key จึงไม่บล็อกการ INSERT order_events ของคนอื่นที่อ้าง FK (FOR KEY SHARE)
+    //
+    // (3) ลำดับล็อกแถวทั้งระบบเป็น "ออเดอร์ → สินค้า" เสมอ: uploadSlip/cancel (UPDATE orders แล้ว UPDATE items), reserve
+    //     (expireStaleOrders UPDATE orders ที่หมดอายุ แล้ว claimItem UPDATE items; INSERT ออเดอร์ใหม่ไม่ล็อกแถวเดิม),
+    //     reserveSlipTokenSlot (ล็อกออเดอร์อย่างเดียว), คำสั่งสินค้าหลังบ้าน (ล็อกสินค้าแล้วอ่านออเดอร์โดยไม่ล็อกแถว) — ไม่มีใคร
+    //     ถือแถวสินค้าแล้วรอแถวออเดอร์ จึงไม่มีวงรอกัน
+    const [ref] = await tx
+      .select({ itemId: orders.itemId })
+      .from(orders)
+      .where(eq(orders.id, input.orderId))
+      .for("no key update");
+    if (!ref) return { ok: false, error: "not_found" } as const;
+    await tx.select({ id: items.id }).from(items).where(eq(items.id, ref.itemId)).for("update");
+
+    // ทุก statement หลังจากนี้เป็น statement ใหม่ (READ COMMITTED) → เห็นออเดอร์ที่ tx จองเพิ่ง commit
     const [snap] = await tx
       .select({
         id: orders.id,

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { vi, afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { items, orderEvents, orders } from "@/db/schema";
@@ -17,7 +17,7 @@ import { uploadSlip } from "@/lib/orders/commands";
 import { getCustomerOrder, getOrderStatusSnapshot } from "@/lib/orders/queries";
 import { buildTimeline, describeOrder } from "@/lib/orders/view";
 import { MAX_HOLDING_PER_IP } from "@/lib/rate-limit";
-import { createDrizzleReserveStore, reserveItem } from "@/lib/reserve";
+import { createDrizzleReserveStore, reserveItem, type ReserveStore } from "@/lib/reserve";
 import type { CreateOrderInput } from "@/lib/validation";
 
 /**
@@ -38,6 +38,9 @@ import type { CreateOrderInput } from "@/lib/validation";
  *
  * ใช้รหัสสินค้า X601-X660 เท่านั้น ลบเฉพาะแถวของตัวเองก่อน/หลังรัน — ห้ามแตะ seed
  */
+// queries.ts เรียก connection() ของ Next (ใช้ได้เฉพาะใน request scope) — นอก Next ให้เป็น no-op เหมือน tests/integration/item-admin.pg.test.ts
+vi.mock("next/server", () => ({ connection: async () => undefined }));
+
 const HAS_DB = Boolean(process.env.DATABASE_URL);
 if (!HAS_DB) {
   console.warn("[integration] ข้ามเทสต์: ไม่พบ DATABASE_URL (รันผ่าน `npm run test:integration`)");
@@ -335,6 +338,148 @@ describe.skipIf(!HAS_DB)("ออเดอร์เดโมคืนสินค
     const o = await getOrder(ended.order.id);
     expect(o.status).toBe("confirmed");
     expect((await eventsOf(ended.order.id)).filter((e) => e.type !== "created" && e.type !== "upload_slip" && e.type !== "confirm")).toHaveLength(0);
+  });
+
+  /**
+   * race ที่ขอบ N นาที (ผลรีวิวรวม): owner กด return ของออเดอร์เดโมตอน snapshot ยังไม่ครบ N แต่มีคนจองสินค้าแทรกหลังครบ N
+   * (claimItem มองว่าออเดอร์เดโมสิ้นสุดแล้ว จึงจองได้) และ tx จองยังไม่ commit ตอนที่ return เริ่ม UPDATE items
+   *
+   * ตัวสร้างจังหวะ (deterministic ไม่ใช้การสุ่มเวลา):
+   *  1. gate: tx อีกตัวล็อกแถวออเดอร์เดโม (FOR UPDATE) → return ที่เริ่มก่อนครบ N จะค้างที่คำสั่งแรกซึ่งล็อกแถวออเดอร์ของตัวเอง
+   *     (now() ของมันถูกตรึงไว้ก่อนครบ N เพราะ now() = เวลาเริ่ม tx; ตอนนี้ยังไม่ได้ล็อกแถวสินค้า)
+   *  2. รอให้ DB เลยเวลา confirmed_at + N แล้วเริ่ม reserveItem ตัวจริง (claimItem จริง) โดยถือ tx ไว้ไม่ commit
+   *  3. ปล่อย gate → return ได้แถวออเดอร์ แล้วขอล็อกแถวสินค้า (ที่ tx จองถืออยู่ → รอจน commit แล้วอ่านสถานะด้วย statement ใหม่
+   *     จึงเห็นออเดอร์ใหม่); โค้ดเดิมที่ไม่ล็อกแถวสินค้าจะไป UPDATE items ... NOT EXISTS แล้วรอ lock ของ tx จอง และปล่อยสินค้าเป็น
+   *     available ทั้งที่ออเดอร์ใหม่ถืออยู่ — ผลสุดท้ายที่ถูกต้อง: ออเดอร์ใหม่ถือสินค้า และสินค้าห้ามเป็น available
+   *  4. commit tx จอง แล้วตรวจสถานะสุดท้าย
+   */
+  async function raceReturnVsReserveAtBoundary(): Promise<{
+    code: string;
+    orderId: string;
+    admin: Awaited<ReturnType<typeof adminTransition>>;
+    reserve: Awaited<ReturnType<typeof reserveItem>>;
+    adminWasBlockedOnItemUpdate: boolean;
+  }> {
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const pollUntil = async (check: () => Promise<boolean>, timeoutMs: number) => {
+      const end = Date.now() + timeoutMs;
+      while (Date.now() < end) {
+        if (await check()) return true;
+        await sleep(100);
+      }
+      return false;
+    };
+    const lockWaiters = async (queryLike: string) => {
+      const r = await db.execute<{ n: number }>(sql`
+        SELECT count(*)::int AS n FROM pg_stat_activity
+        WHERE datname = current_database() AND wait_event_type = 'Lock' AND query ILIKE ${queryLike}`);
+      return r.rows[0]?.n ?? 0;
+    };
+
+    const d = await demoConfirmed();
+    // ขอบเขตเวลา (confirmed_at + N) อยู่อีก ~5 วินาทีข้างหน้า
+    await age(d.order.id, N_SECONDS - 5);
+
+    let releaseGate!: () => void;
+    const gateReleased = new Promise<void>((r) => (releaseGate = r));
+    let gateReady!: () => void;
+    const gateReadyP = new Promise<void>((r) => (gateReady = r));
+    const gate = db.transaction(async (tx) => {
+      await tx.select({ id: orders.id }).from(orders).where(eq(orders.id, d.order.id)).for("update");
+      gateReady();
+      await gateReleased;
+    });
+
+    let releaseReserve!: () => void;
+    const reserveReleased = new Promise<void>((r) => (releaseReserve = r));
+    let reserveClaimed!: () => void;
+    const reserveClaimedP = new Promise<void>((r) => (reserveClaimed = r));
+    // ตัวห่อ store จริง: รัน reserveItem + claimItem ตัวจริงจนจบ แต่ยังไม่ commit จนกว่าจะสั่งปล่อย
+    const holdOpenStore: ReserveStore = {
+      transaction: (fn) =>
+        store.transaction(async (tx) => {
+          const r = await fn(tx);
+          reserveClaimed();
+          await reserveReleased;
+          return r;
+        }),
+    };
+
+    try {
+      await gateReadyP;
+      let adminDone = false;
+      const adminP = adminTransition(db, {
+        orderId: d.order.id,
+        intent: { type: "return", reason: "คืนของที่ขอบเวลา" },
+        actor: OWNER,
+      }).finally(() => {
+        adminDone = true;
+      });
+      // รอจน return ค้างที่การล็อกแถวออเดอร์ (ตรึง now() ของมันไว้ก่อนครบ N)
+      expect(await pollUntil(async () => (await lockWaiters('%from "orders"%for no key update%')) > 0, 8000)).toBe(true);
+      // รอให้เวลาใน DB เลยขอบเขต
+      expect(
+        await pollUntil(async () => {
+          const r = await db.execute<{ passed: boolean }>(
+            sql`SELECT clock_timestamp() > confirmed_at + make_interval(mins => ${DEMO_ORDER_RETURN_MINUTES}) AS passed
+                FROM orders WHERE id = ${d.order.id}`,
+          );
+          return r.rows[0]?.passed === true;
+        }, 15000),
+      ).toBe(true);
+
+      const reserveP = reserveItem(holdOpenStore, input(d.code), newSid(), { clientIpHash: nextIp() });
+      // return ยังไม่ได้ล็อกแถวสินค้า (ค้างที่แถวออเดอร์) → การจองสำเร็จทันทีและถือ tx ค้างไม่ commit
+      await Promise.race([reserveClaimedP, sleep(5000)]);
+
+      releaseGate();
+      await gate;
+      // โค้ดเดิม: return ไป UPDATE items แล้วรอ lock ของ tx จอง (ค้างจนกว่าจะ commit) ซึ่งข้อความคำสั่งขึ้นต้น update "items";
+      // โค้ดใหม่: return รอที่ SELECT ... FOR UPDATE ของสินค้า (ไม่ใช่ update "items") จึงไม่นับเป็นค้างที่ UPDATE
+      let blocked = false;
+      await pollUntil(async () => {
+        if (adminDone) return true;
+        if ((await lockWaiters('%update "items"%')) > 0) {
+          blocked = true;
+          return true;
+        }
+        // โค้ดใหม่: รอที่การล็อกแถวสินค้า (tx จองถืออยู่) — ถึงจุดที่ต้องการแล้ว ไม่ต้องรอหมดเวลา
+        if ((await lockWaiters('%from "items"%for update%')) > 0) return true;
+        return false;
+      }, 4000);
+      if (blocked) await sleep(300);
+
+      releaseReserve();
+      const [admin, reserve] = await Promise.all([adminP, reserveP]);
+      return { code: d.code, orderId: d.order.id, admin, reserve, adminWasBlockedOnItemUpdate: blocked };
+    } finally {
+      releaseGate();
+      releaseReserve();
+      await gate.catch(() => undefined);
+    }
+  }
+
+  it("race ที่ขอบ N นาที: return ยิงพร้อมการจองใหม่ที่ถือ lock ค้าง → สินค้าห้ามถูกปล่อยเป็น available ทั้งที่ออเดอร์ใหม่ถืออยู่ (ล็อกแถวสินค้าก่อนอ่าน)", async () => {
+    const r = await raceReturnVsReserveAtBoundary();
+
+    // owner คืนสำเร็จ (ตัดสินด้วย snapshot ก่อนครบ N) และการจองใหม่สำเร็จ — เสมอไม่ว่าลำดับ lock จะเป็นแบบไหน
+    expect(r.admin).toEqual({ ok: true, from: "confirmed", to: "cancelled" });
+    expect(r.reserve.ok).toBe(true);
+    if (!r.reserve.ok) return;
+    expect((await getOrder(r.orderId)).status).toBe("cancelled");
+
+    // invariant: มีออเดอร์ใหม่ที่ถือสินค้า → สินค้าต้องเป็น reserved ถึงเวลาหมดอายุของออเดอร์ใหม่ ห้ามเป็น available
+    const item = await getItem(r.code);
+    expect(item.status).toBe("reserved");
+    expect(item.reservedUntil!.getTime()).toBe(r.reserve.order.expiresAt.getTime());
+    expect(await live(r.code)).toBe("reserved");
+    // และคนอื่นจองซ้ำไม่ได้ (ถ้าสินค้าถูกปล่อยเป็น available จะจองซ้ำได้ = ขายซ้ำ)
+    expect(await freshReserve(r.code)).toMatchObject({ ok: false, reason: "unavailable" });
+    const all = await ordersOfItem(r.code);
+    expect(all).toHaveLength(2);
+    expect(all.filter((o) => o.status === "pending_payment")).toHaveLength(1);
+    // ไม่ปล่อยให้ UPDATE items ... NOT EXISTS ไปรอ lock ของ tx จอง (นั่นคือต้นเหตุของ race เดิม)
+    expect(r.adminWasBlockedOnItemUpdate).toBe(false);
   });
 
   describe("owner คืนสินค้าเข้าร้าน (return)", () => {

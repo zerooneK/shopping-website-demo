@@ -8,6 +8,7 @@ import {
   normalizeIpForRateLimit,
   UNKNOWN_IP,
 } from "@/lib/client-ip";
+import { getSessionKey, MIN_SECRET_LENGTH } from "@/lib/auth";
 import {
   decideIpRateLimit,
   MAX_HOLDING_PER_IP,
@@ -85,6 +86,28 @@ describe("hashClientIp", () => {
     vi.stubEnv("SESSION_SECRET", "");
     vi.stubEnv("NODE_ENV", "development");
     expect(hashClientIp("203.0.113.5")).not.toBe(prod);
+  });
+
+  it("เกณฑ์ SESSION_SECRET เดียวกับกุญแจ session (>= 32): production ที่ตั้งสั้นกว่า 32 = ไม่มีกุญแจ (fail-closed) / 32 พอดี = ใช้ได้", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("SESSION_SECRET", "x".repeat(31));
+    expect(isIpHashKeyConfigured()).toBe(false);
+    expect(() => hashClientIp("203.0.113.5")).toThrow(IpHashKeyMissingError);
+    expect(getSessionKey({ SESSION_SECRET: "x".repeat(31) })).toBeNull(); // หลังบ้านปฏิเสธค่าเดียวกัน
+
+    vi.stubEnv("SESSION_SECRET", "x".repeat(MIN_SECRET_LENGTH));
+    expect(isIpHashKeyConfigured()).toBe(true);
+    expect(hashClientIp("203.0.113.5")).toMatch(/^[0-9a-f]{64}$/);
+    expect(getSessionKey({ SESSION_SECRET: "x".repeat(MIN_SECRET_LENGTH) })).not.toBeNull();
+  });
+
+  it("dev/test ที่ SESSION_SECRET สั้นเกินไป: ไม่ใช้ค่าสั้นนั้นเป็นกุญแจ (ได้ hash เดียวกับตอนไม่ตั้งเลย)", () => {
+    vi.stubEnv("NODE_ENV", "test");
+    vi.stubEnv("SESSION_SECRET", "");
+    const unset = hashClientIp("203.0.113.5");
+    vi.stubEnv("SESSION_SECRET", "short-secret");
+    expect(isIpHashKeyConfigured()).toBe(true);
+    expect(hashClientIp("203.0.113.5")).toBe(unset);
   });
 
   it("dev/test ไม่มี SESSION_SECRET: ใช้กุญแจสำรองได้ ไม่เตือน ไม่ throw", () => {

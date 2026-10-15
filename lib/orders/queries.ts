@@ -1,5 +1,6 @@
 import "server-only";
 import { asc, eq, sql } from "drizzle-orm";
+import { connection } from "next/server";
 import { getDb } from "../../db/client";
 import type { DeliveryMethod, OrderStatus } from "../../db/schema";
 import { items, orderEvents, orders } from "../../db/schema";
@@ -39,6 +40,9 @@ export type CustomerOrder = {
 };
 
 export async function getCustomerOrder(token: string): Promise<CustomerOrder | null> {
+  // ผลขึ้นกับ request/เวลาจริงเสมอ: บังคับให้ทำตอนมี request เท่านั้น ไม่ให้ Next พยายาม prerender (ไม่งั้นไดรเวอร์ DB
+  // เรียก randomBytes ตอน prerender แล้วขึ้น error "unstable value … while prerendering" ใน log ตอน build)
+  await connection();
   if (!isValidOrderToken(token)) return null;
   const db = getDb();
   await expireOrderIfStale(db, token);
@@ -104,6 +108,7 @@ export type OrderStatusSnapshot = {
 
 /** ข้อมูลน้อยที่สุดที่ใช้ poll: สถานะ + เวลาหมดอายุ + เวลาของ DB (ไม่มี PII/สลิป/ราคา) */
 export async function getOrderStatusSnapshot(token: string): Promise<OrderStatusSnapshot | null> {
+  await connection(); // เหตุผลเดียวกับ getCustomerOrder
   if (!isValidOrderToken(token)) return null;
   const db = getDb();
   await expireOrderIfStale(db, token);

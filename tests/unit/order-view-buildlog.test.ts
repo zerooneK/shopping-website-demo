@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseBuildLog, splitInlineCode } from "@/lib/build-log";
+import { parseBuildLog, splitInlineCode, stageKey, summarizeBuildLog } from "@/lib/build-log";
 import { buildTimeline, describeOrder, isValidOrderToken } from "@/lib/orders/view";
 
 const T0 = Date.parse("2026-10-13T10:00:00Z");
@@ -190,5 +190,82 @@ describe("splitInlineCode", () => {
       { code: true, text: "b" },
     ]);
     expect(splitInlineCode("ไม่มีโค้ด")).toEqual([{ code: false, text: "ไม่มีโค้ด" }]);
+  });
+});
+
+describe("summarizeBuildLog (ตัวเลขหน้า /about นับจากหัวข้อรายการจริง ไม่ประมาณ)", () => {
+  const md = [
+    "## 2026-10-12 · ขั้น 2 · orchestrator (Opus 5.5 · medium)",
+    "- งาน: สเปค",
+    "## 2026-10-12 · ขั้น 3a · shop-builder (sonnet · medium)",
+    "- งาน: a",
+    "## 2026-10-12 · ขั้น 3a-fix · shop-builder (sonnet · medium)",
+    "- งาน: b",
+    "## 2026-10-12 · ขั้น 3a-review · shop-reviewer (opus · medium → low)",
+    "- งาน: c",
+    "## 2026-10-13 · ขั้น 3b-2 · orchestrator ตรวจรับ + shop-reviewer (opus · medium → low → low)",
+    "- งาน: d",
+    "## 2026-10-13 · ขั้น 3b-2-fix2 · shop-builder (sonnet · high)",
+    "- งาน: e",
+    "## 2026-10-14 · ขั้น 4b-fix2 · shop-builder (sonnet · medium)",
+    "- งาน: f",
+    "## 2026-10-14 · ขั้น 5-fix (ผลรีวิวรวม High: เดโม) · shop-builder (sonnet · xhigh)",
+    "- งาน: g",
+    "## 2026-10-14 · ขั้น 5 · shop-builder (opus · medium)",
+    "- งาน: h",
+  ].join("\n");
+
+  it("นับรายการ ขั้นตาม SPEC §11 วัน รอบแก้ รอบรีวิว รอบขยับ effort และการส่งงาน Builder ให้ Opus", () => {
+    expect(summarizeBuildLog(parseBuildLog(md))).toEqual({
+      entryCount: 9,
+      // 2, 3a, 3b, 4 (จาก 4b), 5
+      stageCount: 5,
+      firstDate: "2026-10-12",
+      lastDate: "2026-10-14",
+      daysWithEntries: 3,
+      // 3a-fix, 3b-2-fix2, 4b-fix2, 5-fix
+      fixEntryCount: 4,
+      reviewerEntryCount: 2,
+      // medium → low (2) + medium → low → low (3)
+      reviewerRounds: 5,
+      // sonnet · high, sonnet · xhigh
+      effortRaisedCount: 2,
+      opusBuilderCount: 1,
+    });
+  });
+
+  it("บันทึกว่าง: ทุกค่าเป็น 0/null ไม่แต่งตัวเลข", () => {
+    expect(summarizeBuildLog([])).toEqual({
+      entryCount: 0,
+      stageCount: 0,
+      firstDate: null,
+      lastDate: null,
+      daysWithEntries: 0,
+      fixEntryCount: 0,
+      reviewerEntryCount: 0,
+      reviewerRounds: 0,
+      effortRaisedCount: 0,
+      opusBuilderCount: 0,
+    });
+  });
+
+  it("stageKey: ขั้นย่อยรวมเข้าขั้นแม่ตาม SPEC", () => {
+    expect(
+      ["2", "3a", "3b-1", "3b-2-fix2", "3c-1", "4", "4b-fix2", "5-fix (ผลรีวิวรวม)", "x"].map(stageKey),
+    ).toEqual(["2", "3a", "3b", "3b", "3c", "4", "4", "5", null]);
+  });
+
+  it("กับ docs/BUILD_LOG.md จริง: ตัวเลขสอดคล้องกับที่นับได้ด้วยตา (ไม่ใช่ 0 และไม่มีเงิน/เวลาเป็นชั่วโมง)", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const entries = parseBuildLog(await readFile("docs/BUILD_LOG.md", "utf8"));
+    const s = summarizeBuildLog(entries);
+    expect(s.entryCount).toBe(entries.length);
+    expect(s.stageCount).toBeGreaterThanOrEqual(6); // 2, 3a, 3b, 3c, 4, 5
+    expect(s.fixEntryCount).toBeGreaterThanOrEqual(6);
+    expect(s.reviewerRounds).toBeGreaterThanOrEqual(5);
+    expect(s.effortRaisedCount).toBeGreaterThanOrEqual(2);
+    expect(s.firstDate).toBe("2026-10-12");
+    // ไม่มีรายการไหนใน BUILD_LOG ส่งงาน Builder ให้ Opus
+    expect(s.opusBuilderCount).toBe(0);
   });
 });

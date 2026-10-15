@@ -352,4 +352,47 @@ test.describe("ถ้อยคำสอดคล้องกับสิ่ง�
     // DEMO_MODE=true ใน e2e → ประโยค "ลองหลังบ้านได้" ต้องแสดง (ผูกกับ isDemoMode())
     expect(about).toContain("ลองได้แบบเดโม");
   });
+
+  test("ไม่อ้างเกินจริง: รูปเป็นภาพประกอบจาก Unsplash (ไม่ใช่ถ่ายจริง), /about ตรงกับบันทึกจริง, /privacy บอกไม่ให้ใส่ข้อมูลส่วนตัวใน issue", async ({ page }) => {
+    // หน้าแรก: ไม่อ้างว่าถ่ายรูปจริง/คัดมาเอง
+    await page.goto("/");
+    const hero = await page.locator("#hero-title").locator("xpath=ancestor::section[1]").innerText();
+    expect(hero).toContain("รูปประกอบจาก Unsplash");
+    expect(hero).toContain("ข้อมูลตัวอย่าง");
+    expect(hero).not.toContain("ถ่ายรูปจริง");
+    expect(hero).not.toContain("คัดมา");
+    expect(hero).not.toContain("คลิป"); // ไม่อ้างว่ามีคลิปเผยแพร่แล้ว
+    expect(hero).toContain("ถ้ามีรหัสสินค้า พิมพ์ค้นหาได้เลย");
+    expect(await page.locator("meta[name=description]").getAttribute("content")).not.toMatch(/คัดมา|ถ่ายรูปจริง/);
+
+    // หน้าสินค้า: ส่วนเครดิตภาพบอกว่าไม่ใช่ภาพของจริง
+    await page.goto(`/item/${E2E_CODES.main}`);
+    await expect(page.locator('section[aria-labelledby="credit-heading"]')).toContainText(
+      "รูปประกอบจาก Unsplash ไม่ใช่ภาพถ่ายของสินค้าชิ้นนี้จริง",
+    );
+
+    // /about: ตารางทีมตรงกับ BUILD_LOG (Orchestrator = Sonnet 5.5, ขั้นสเปคเป็น Opus 5.5) + สรุปที่นับจากบันทึก + ไม่แต่งเงิน/เวลา
+    await page.goto("/about");
+    const orchestratorRow = page.locator("tbody tr", { has: page.getByRole("rowheader", { name: "Orchestrator" }) });
+    await expect(orchestratorRow).toContainText("Sonnet 5.5");
+    await expect(orchestratorRow).toContainText("Opus 5.5");
+    const summary = page.getByTestId("build-summary");
+    await expect(summary).toContainText("รายการในบันทึก");
+    await expect(summary).toContainText("รอบรีวิวของ Reviewer");
+    await expect(summary).toContainText("รอบที่ขยับ effort ขึ้น");
+    await expect(summary).toContainText("ส่งงานให้ Opus แทน Builder");
+    await expect(summary).toContainText("ไม่ใช่จำนวนชั่วโมงทำงาน");
+    await expect(page.getByTestId("build-cost-note")).toContainText("ยังไม่ได้บันทึก");
+    const aboutText = await page.locator('section[aria-labelledby="effort-cost"]').innerText();
+    expect(aboutText).not.toMatch(/[฿$]s?d|d+s?(ดอลลาร์|บาท|ชั่วโมง|ชม.)(?!ทำงาน)/);
+    await expect(page.getByRole("heading", { name: "เครดิตรูปภาพ" })).toBeVisible();
+    await expectNoHorizontalScroll(page);
+
+    // /privacy: ขอลบข้อมูลผ่าน GitHub ต้องบอกไม่ให้ใส่ข้อมูลส่วนตัวใน issue
+    await page.goto("/privacy");
+    const rights = await page.locator('section[aria-labelledby="rights"]').innerText();
+    expect(rights).toContain("อย่าใส่ข้อมูลส่วนตัวใน issue");
+    expect(rights).toContain("ระบุแค่รหัสสินค้าและเวลา");
+    expect(rights).toContain("ข้อมูลจะถูกลบเองในรอบรีเซ็ต");
+  });
 });

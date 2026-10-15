@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { splitInlineCode, type BuildLogBullet, type BuildLogEntry } from "@/lib/build-log";
+import { splitInlineCode, summarizeBuildLog, type BuildLogBullet, type BuildLogEntry } from "@/lib/build-log";
 import { DEMO_ORDER_RETURN_MINUTES } from "@/lib/availability";
 import { getBuildLog } from "@/lib/build-log-file";
 import { isDemoMode } from "@/lib/demo";
@@ -8,7 +8,7 @@ import { isDemoMode } from "@/lib/demo";
 export const metadata: Metadata = {
   title: "เกี่ยวกับโปรเจกต์",
   description:
-    "Case study: ร้านขายของมือสองแบบเดโมที่สร้างโดยทีม AI (Opus วางสเปคและรีวิว, Sonnet เขียนโค้ด, Haiku เขียนคอนเทนต์) พร้อมไทม์ไลน์จริงจากบันทึกการสร้าง",
+    "Case study: ร้านขายของมือสองแบบเดโมที่สร้างโดยทีม AI (Opus วางสเปคและรีวิว, Sonnet ประสานงานและเขียนโค้ด, Haiku เขียนคอนเทนต์) พร้อมไทม์ไลน์จริงจากบันทึกการสร้าง",
 };
 
 const GITHUB_URL = "https://github.com/zerooneK/shopping-website-demo";
@@ -17,8 +17,9 @@ const TEAM = [
   {
     role: "Orchestrator",
     agent: "session หลัก",
-    model: "Opus",
-    effort: "medium",
+    // ตามบันทึก: ขั้นเขียนสเปคใช้ Opus 5.5 · medium แล้วผู้ใช้สลับโมเดลใน session เป็น Sonnet 5.5 (รายการหลังจากนั้นบันทึกว่า Sonnet)
+    model: "Sonnet 5.5 (ขั้นเขียนสเปคเป็น Opus 5.5)",
+    effort: "medium ตอนเขียนสเปค · ช่วงหลังไม่ได้บันทึก",
     job: "อ่านแผน วางสเปค แบ่งงาน ตัดสินใจ และคุยกับผู้ใช้",
   },
   {
@@ -132,6 +133,7 @@ function LogEntry({ entry }: { entry: BuildLogEntry }) {
 
 export default async function AboutPage() {
   const log = await getBuildLog();
+  const summary = summarizeBuildLog(log);
   // ข้อความ "ลองหลังบ้านได้" ต้องตรงกับค่า DEMO_MODE จริง (ปิดโหมดเดโม = ไม่มีปุ่มเดโมให้ลอง)
   const demo = isDemoMode();
 
@@ -230,6 +232,57 @@ export default async function AboutPage() {
         </dl>
       </section>
 
+      <section aria-labelledby="effort-cost" className="mt-14 border-t border-rule pt-8">
+        <h2 id="effort-cost" className="display text-4xl">
+          งานที่ทำ ค่าใช้จ่าย และเวลา
+        </h2>
+        {log.length > 0 ? (
+          <>
+            <p className="mt-3 max-w-2xl text-muted">
+              ตัวเลขด้านล่างนับจากหัวข้อรายการใน <code className="font-mono text-[0.9em]">docs/BUILD_LOG.md</code>{" "}
+              ตอน build เท่านั้น ไม่ได้ประมาณเพิ่ม และนับเฉพาะสิ่งที่เขียนไว้ในหัวข้อรายการ
+              รอบรีวิวที่เล่าไว้ในเนื้อของรายการอื่นไม่ถูกนับ จึงเป็นค่าขั้นต่ำ
+            </p>
+            <dl data-testid="build-summary" className="mt-4 divide-y divide-rule border-y border-rule">
+              {(
+                [
+                  ["รายการในบันทึก", `${summary.entryCount} รายการ ใน ${summary.stageCount} ขั้นตามสเปค`],
+                  [
+                    "ช่วงวันที่ที่มีบันทึก",
+                    summary.firstDate && summary.lastDate
+                      ? `${summary.firstDate} ถึง ${summary.lastDate} (${summary.daysWithEntries} วันที่มีบันทึก — ไม่ใช่จำนวนชั่วโมงทำงาน)`
+                      : "ไม่มี",
+                  ],
+                  ["รอบแก้หลังรีวิว", `${summary.fixEntryCount} รายการแก้ไข (ขั้นที่ลงท้าย -fix)`],
+                  [
+                    "รอบรีวิวของ Reviewer",
+                    `${summary.reviewerRounds} รอบ ใน ${summary.reviewerEntryCount} รายการที่ Reviewer เป็นผู้บันทึก`,
+                  ],
+                  ["รอบที่ขยับ effort ขึ้น", `${summary.effortRaisedCount} รายการ (medium → high ตามกฎของทีม)`],
+                  [
+                    "ส่งงานให้ Opus แทน Builder",
+                    summary.opusBuilderCount === 0
+                      ? "ไม่มีรายการในบันทึก"
+                      : `${summary.opusBuilderCount} รายการ`,
+                  ],
+                ] as const
+              ).map(([k, v]) => (
+                <div key={k} className="grid gap-1 py-3 sm:grid-cols-[14rem_1fr]">
+                  <dt className="meta meta-th text-ink">{k}</dt>
+                  <dd className="leading-7">{v}</dd>
+                </div>
+              ))}
+            </dl>
+          </>
+        ) : (
+          <p className="mt-3 max-w-2xl text-muted">ยังไม่พบบันทึกการสร้างในตอน build จึงไม่มีตัวเลขสรุป</p>
+        )}
+        <p data-testid="build-cost-note" className="mt-4 max-w-2xl leading-8">
+          <strong>ค่าใช้จ่ายและเวลาที่ใช้จริง: ยังไม่ได้บันทึก</strong> — บันทึกการสร้างไม่มีข้อมูลโทเค็น ค่าใช้จ่าย
+          หรือชั่วโมงทำงานต่อขั้น จึงไม่แสดงตัวเลขเหล่านี้ (ไม่เดา)
+        </p>
+      </section>
+
       <section aria-labelledby="timeline" className="mt-14 border-t border-rule pt-8">
         <h2 id="timeline" className="display text-4xl">
           ไทม์ไลน์การสร้าง
@@ -262,6 +315,25 @@ export default async function AboutPage() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section aria-labelledby="photo-credits" className="mt-14 border-t border-rule pt-8">
+        <h2 id="photo-credits" className="display text-4xl">
+          เครดิตรูปภาพ
+        </h2>
+        <p className="mt-3 max-w-2xl leading-8">
+          รูปประกอบสินค้าเดโมทั้งหมดมาจาก{" "}
+          <a
+            href="https://unsplash.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-4"
+          >
+            Unsplash
+          </a>{" "}
+          ตามเงื่อนไขของ Unsplash License ไม่ใช่ภาพถ่ายของสินค้าที่ขายจริง (สินค้า คำบรรยาย และตำหนิในร้านเป็นข้อมูลตัวอย่าง)
+          ชื่อช่างภาพของแต่ละรูปพร้อมลิงก์ไปยังโปรไฟล์ อยู่ในส่วน “เครดิตภาพ” ท้ายหน้าสินค้าแต่ละชิ้น
+        </p>
       </section>
 
       <section aria-labelledby="source" className="mt-14 border-t border-rule pt-8">

@@ -10,6 +10,7 @@ import * as schema from "@/db/schema";
 import { items, orderEvents, orders } from "@/db/schema";
 import { parseSeedItems } from "@/db/seed-schema";
 import { RESET_LOCK_KEY, resetDemoData } from "@/lib/cron/reset";
+import { adminTransition } from "@/lib/orders/admin-commands";
 import { createDrizzleReserveStore, reserveItem, type ReserveStore } from "@/lib/reserve";
 import { sql } from "drizzle-orm";
 
@@ -392,6 +393,111 @@ describe.skipIf(!HAS_DB)("cron reset บน Postgres จริง (schema ชั
     const ok = await resetDemoData(db, { seedItems: seed });
     expect(ok.status).toBe("ran");
     await assertSeedState();
+  });
+
+  /**
+   * ห่อ Db ให้ "การ await UPDATE ตัวแรก" ค้างไว้จนกว่าจะปล่อย gate — ใช้หยุด adminTransition หลังจากที่มันล็อกแถวออเดอร์/สินค้าแล้ว
+   * แต่ก่อนจะ UPDATE ออเดอร์ (ไม่แตะโค้ดจริง: ทุก SQL ยังรันเหมือนเดิมหลังปล่อย)
+   */
+  function gateFirstUpdate(base: Db) {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let reached!: () => void;
+    const reachedP = new Promise<void>((r) => (reached = r));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const wrapBuilder = (b: any): any =>
+      new Proxy(b, {
+        get(t, p) {
+          if (p === "then") {
+            return (onFulfilled: unknown, onRejected: unknown) => {
+              reached();
+              return gate.then(() => t.then(onFulfilled, onRejected));
+            };
+          }
+          const v = Reflect.get(t, p, t);
+          if (typeof v !== "function") return v;
+          return (...args: unknown[]) => {
+            const out = v.apply(t, args);
+            return out && typeof out === "object" ? wrapBuilder(out) : out;
+          };
+        },
+      });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const wrapTx = (tx: any): any =>
+      new Proxy(tx, {
+        get(t, p) {
+          const v = Reflect.get(t, p, t);
+          if (p === "update") return (...args: unknown[]) => wrapBuilder(v.apply(t, args));
+          return typeof v === "function" ? v.bind(t) : v;
+        },
+      });
+    const gated = new Proxy(base, {
+      get(t, p) {
+        const v = Reflect.get(t, p, t);
+        if (p === "transaction") {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          return (fn: (tx: any) => unknown, cfg?: unknown) => (v as any).call(t, (tx: unknown) => fn(wrapTx(tx)), cfg);
+        }
+        return typeof v === "function" ? v.bind(t) : v;
+      },
+    }) as Db;
+    return { gated, reachedP, release };
+  }
+
+  const errorText = (e: unknown): string => {
+    const parts: string[] = [];
+    for (let cur = e as { code?: string; message?: string; cause?: unknown } | undefined, i = 0; cur && i < 5; i++) {
+      parts.push(String(cur.code ?? ""), String(cur.message ?? ""));
+      cur = cur.cause as typeof cur;
+    }
+    return parts.join(" | ");
+  };
+
+  it("ลำดับล็อกของ adminTransition กับ cron reset: admin ค้างถือ lock (ออเดอร์+สินค้า) แล้ว reset ยิงพร้อมกัน → ไม่ deadlock (40P01) ทั้งคู่จบ", async () => {
+    await dirty();
+    const [target] = await db.select({ id: orders.id }).from(orders).where(sql`status = 'awaiting_review'`);
+    const { gated, reachedP, release } = gateFirstUpdate(db);
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    try {
+      const adminP = adminTransition(gated, {
+        orderId: target.id,
+        intent: { type: "reject", reason: "ทดสอบลำดับล็อก" },
+        actor: { role: "owner" },
+      });
+      // admin ล็อกแถวที่ต้องการครบแล้ว กำลังจะ UPDATE ออเดอร์ (ค้างที่ gate)
+      await Promise.race([reachedP, sleep(15_000).then(() => Promise.reject(new Error("admin did not reach gate")))]);
+
+      const cronP = resetDemoData(db, { seedItems: seed, lockTimeoutMs: 10_000 });
+      // รอให้ reset ไปค้างรอ LOCK TABLE (โค้ดเก่า: ได้ orders แล้วรอ items / โค้ดใหม่: รอ orders ตั้งแต่แรก)
+      const end = Date.now() + 8000;
+      let waiting = 0;
+      while (Date.now() < end && waiting === 0) {
+        const r = await adminPool.query(
+          `SELECT count(*)::int AS n FROM pg_stat_activity
+           WHERE datname = current_database() AND wait_event_type = 'Lock' AND query ILIKE '%LOCK TABLE%'`,
+        );
+        waiting = r.rows[0].n;
+        if (waiting === 0) await sleep(100);
+      }
+      expect(waiting, "reset ต้องค้างรอ lock ก่อนปล่อย admin").toBeGreaterThan(0);
+
+      release();
+      const [adminR, cronR] = await Promise.allSettled([adminP, cronP]);
+      for (const r of [adminR, cronR]) {
+        if (r.status === "rejected") {
+          const text = errorText(r.reason);
+          expect(text, `ต้องไม่ใช่ deadlock: ${text}`).not.toMatch(/40P01|deadlock/i);
+        }
+      }
+      // ทั้งคู่จบจริง: admin ปฏิเสธสำเร็จ แล้ว reset รันตามหลัง (ล้างออเดอร์ทั้งหมดกลับเป็น seed)
+      expect(adminR.status).toBe("fulfilled");
+      expect(adminR.status === "fulfilled" && adminR.value).toEqual({ ok: true, from: "awaiting_review", to: "rejected" });
+      expect(cronR.status).toBe("fulfilled");
+      expect(cronR.status === "fulfilled" && cronR.value.status).toBe("ran");
+      await assertSeedState();
+    } finally {
+      release();
+    }
   });
 
   it("ตารางจริง (public.items / orders / order_events) ไม่ถูกแตะเลย", async () => {

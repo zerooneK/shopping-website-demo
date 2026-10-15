@@ -74,6 +74,9 @@ export function ItemView({ item, live }: { item: PublicItem; live: LiveStatus | 
                 <h2 id="credit-heading" className="meta meta-th">
                   เครดิตภาพ
                 </h2>
+                <p className="mt-1 text-sm leading-6 text-muted">
+                  รูปประกอบจาก Unsplash ไม่ใช่ภาพถ่ายของสินค้าชิ้นนี้จริง รายละเอียดและตำหนิเป็นข้อมูลตัวอย่างของร้านเดโม
+                </p>
                 <ul className="mt-1 text-sm text-muted">
                   {item.images.map((img, i) =>
                     img.credit ? (
